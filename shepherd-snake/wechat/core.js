@@ -18,8 +18,10 @@ var Core = (function () {
   function demonsBlink(level) { return level >= 46; }
   function hasSkills(level) { return level >= 5; }           // 技能是玩具,早点给
   function tickMs(level) {
-    return level <= 40 ? 185 - Math.floor(level / 4)         // 1-40: 185→175ms,基本无感
-                       : Math.max(135, 175 - (level - 40) * 4);
+    // 每 5 关提一档速度(玩家能明显感到"变快了"的爽感),
+    // 但 40 关前始终在"爽而不难"区间,40 关(136ms)才摸到难度门槛
+    return level <= 40 ? 200 - Math.floor(level / 5) * 8
+                       : Math.max(115, 136 - (level - 40) * 2);
   }
 
   var SKILLS = {
