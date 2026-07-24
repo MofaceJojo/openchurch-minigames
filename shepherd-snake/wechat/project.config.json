@@ -1,0 +1,11 @@
+{
+  "description": "牧者行列 · OpenChurch 小游戏(微信小游戏版)",
+  "appid": "touristappid",
+  "projectname": "shepherd-snake",
+  "compileType": "game",
+  "libVersion": "latest",
+  "setting": {
+    "es6": false,
+    "minified": true
+  }
+}
