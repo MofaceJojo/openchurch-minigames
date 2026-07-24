@@ -4,12 +4,23 @@
 var Core = (function () {
   var COLS = 12, ROWS = 16, MAX_LEVEL = 50;
 
-  function quota(level) { return Math.min(50, 10 + Math.round((level - 1) * 40 / 49)); }
-  function demonCount(level) { return level < 2 ? 0 : Math.min(10, 1 + Math.floor((level - 2) / 5)); }
-  function demonsMove(level) { return level >= 30; }
-  function demonsBlink(level) { return level >= 40; }
-  function hasSkills(level) { return level >= 10; }
-  function tickMs(level) { return Math.max(110, 170 - Math.floor(level * 1.2)); }
+  // 设计准则:1-40 关零压力,41-50 关才略微上强度;娱乐性 >> 难度
+  function quota(level) {
+    return level <= 40 ? 10 + Math.floor(level / 4)          // lv1-40: 10→20,缓到几乎无感
+                       : 20 + (level - 40) * 3;              // lv41-50: 23→50,冲刺段
+  }
+  function demonCount(level) {
+    if (level < 2) return 0;
+    if (level <= 40) return Math.min(3, 1 + Math.floor((level - 2) / 12)); // 最多 3 只,站桩
+    return Math.min(7, 4 + Math.floor((level - 41) / 3));                  // 冲刺段 4→7
+  }
+  function demonsMove(level) { return level >= 41; }
+  function demonsBlink(level) { return level >= 46; }
+  function hasSkills(level) { return level >= 5; }           // 技能是玩具,早点给
+  function tickMs(level) {
+    return level <= 40 ? 185 - Math.floor(level / 4)         // 1-40: 185→175ms,基本无感
+                       : Math.max(135, 175 - (level - 40) * 4);
+  }
 
   var SKILLS = {
     summon: { name: "Gather", desc: "Nearby believers join your line at once" },
@@ -40,7 +51,7 @@ var Core = (function () {
   }
 
   function fillBelievers(st) {
-    var want = Math.min(3, quota(st.level) - st.rescued - st.believers.length);
+    var want = Math.min(4, quota(st.level) - st.rescued - st.believers.length);
     while (want-- > 0) st.believers.push(freeCell(st, 2));
   }
 
