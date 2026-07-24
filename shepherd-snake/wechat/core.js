@@ -11,17 +11,18 @@ var Core = (function () {
   }
   function demonCount(level) {
     if (level < 2) return 0;
-    if (level <= 40) return Math.min(3, 1 + Math.floor((level - 2) / 12)); // 最多 3 只,站桩
-    return Math.min(7, 4 + Math.floor((level - 41) / 3));                  // 冲刺段 4→7
+    return Math.min(3, 1 + Math.floor((level - 2) / 12));    // 小恶魔永远站桩、最多 3 只(地形)
   }
-  function demonsMove(level) { return level >= 41; }
-  function demonsBlink(level) { return level >= 46; }
+  function hasRival(level) { return level >= 30; }           // 30 关起:大恶魔蛇和你比赛抢信徒
+  function rivalEvery(level) {                                // 每 N 拍走一步,越后期越敏捷
+    return level >= 46 ? 2 : level >= 38 ? 3 : 4;
+  }
+  var RIVAL_MAX_LEN = 14;
   function hasSkills(level) { return level >= 5; }           // 技能是玩具,早点给
   function tickMs(level) {
     // 每 5 关提一档速度(玩家能明显感到"变快了"的爽感),
-    // 但 40 关前始终在"爽而不难"区间,40 关(136ms)才摸到难度门槛
-    return level <= 40 ? 200 - Math.floor(level / 5) * 8
-                       : Math.max(115, 136 - (level - 40) * 2);
+    // 40 关(136ms)到顶,之后不再用速度上难度——难度交给大恶魔蛇
+    return 200 - Math.min(8, Math.floor(level / 5)) * 8;
   }
 
   var SKILLS = {
@@ -64,6 +65,9 @@ var Core = (function () {
     st.dir = { x: 0, y: -1 }; st.nextDir = st.dir;
     st.demons = []; st.believers = []; st.pickup = null;
     st.skill = null; st.effect = null; st.tickCount = 0;
+    st.rival = hasRival(level)
+      ? { body: [{ x: COLS - 2, y: 1 }, { x: COLS - 1, y: 1 }, { x: COLS - 1, y: 0 }] }
+      : null;
     var i, n = demonCount(level);
     for (i = 0; i < n; i++) st.demons.push(freeCell(st, 5));
     if (hasSkills(level)) st.pickup = freeCell(st, 4);
@@ -118,21 +122,36 @@ var Core = (function () {
     return { id: id };
   }
 
-  function moveDemons(st) {
-    var i, dirs = [[1, 0], [-1, 0], [0, 1], [0, -1]];
-    if (demonsMove(st.level) && st.tickCount % 6 === 0) {
-      for (i = 0; i < st.demons.length; i++) {
-        var d = st.demons[i], v = dirs[(Math.random() * 4) | 0];
-        var nx = d.x + v[0], ny = d.y + v[1];
-        if (nx >= 0 && nx < COLS && ny >= 0 && ny < ROWS && !occupied(st, nx, ny)) { d.x = nx; d.y = ny; }
-      }
+  function cellInList(list, x, y) {
+    for (var i = 0; i < list.length; i++) if (list[i].x === x && list[i].y === y) return i;
+    return -1;
+  }
+
+  /* 大恶魔蛇:朝最近的信徒贪心走一步,抢到就挂在尾巴上 */
+  function rivalTick(st) {
+    if (!st.rival || st.tickCount % rivalEvery(st.level) !== 0) return;
+    var head = st.rival.body[0], target = null, best = 1e9, i;
+    for (i = 0; i < st.believers.length; i++) {
+      var b = st.believers[i], d = Math.abs(b.x - head.x) + Math.abs(b.y - head.y);
+      if (d < best) { best = d; target = b; }
     }
-    if (demonsBlink(st.level) && st.tickCount % 45 === 0 && st.demons.length) {
-      var j = (Math.random() * st.demons.length) | 0;
-      var p = freeCell(st, 4);
-      st.demons[j].x = p.x; st.demons[j].y = p.y;
-      st.demons[j].blinked = st.tickCount; // 渲染层可做闪现特效
+    if (!target) return;
+    var opts = [];
+    if (target.x !== head.x) opts.push({ x: head.x + (target.x > head.x ? 1 : -1), y: head.y });
+    if (target.y !== head.y) opts.push({ x: head.x, y: head.y + (target.y > head.y ? 1 : -1) });
+    if (opts.length === 2 && Math.abs(target.y - head.y) > Math.abs(target.x - head.x)) opts.reverse();
+    var nh = null;
+    for (i = 0; i < opts.length; i++) {
+      var o = opts[i];
+      if (cellInList(st.rival.body, o.x, o.y) < 0 &&
+          cellInList(st.snake, o.x, o.y) < 0 &&
+          cellInList(st.demons, o.x, o.y) < 0) { nh = o; break; }
     }
+    if (!nh) return; // 被堵住就原地等一拍
+    st.rival.body.unshift(nh);
+    var bi = cellInList(st.believers, nh.x, nh.y);
+    if (bi >= 0) { st.believers.splice(bi, 1); fillBelievers(st); } // 抢走一个,挂上尾巴
+    if (bi < 0 || st.rival.body.length > RIVAL_MAX_LEN) st.rival.body.pop();
   }
 
   function die(st, msg) { st.mode = "dead"; st.deathMsg = msg; }
@@ -141,7 +160,7 @@ var Core = (function () {
     if (st.mode !== "play") return;
     st.tickCount++;
     if (st.effect && --st.effect.ticksLeft <= 0) st.effect = null;
-    moveDemons(st);
+    rivalTick(st);
 
     st.dir = st.nextDir;
     var head = { x: st.snake[0].x + st.dir.x, y: st.snake[0].y + st.dir.y };
@@ -149,14 +168,34 @@ var Core = (function () {
 
     if (head.x < 0 || head.x >= COLS || head.y < 0 || head.y >= ROWS)
       return die(st, "The little angel flew out of the field");
+    // 尾巴宽容:不吃人时尾巴这拍会挪走,追尾是安全的(娱乐性优先)
+    var eating = cellInList(st.believers, head.x, head.y) >= 0;
     if (!effectActive(st, "ghost"))
-      for (i = 0; i < st.snake.length; i++)
+      for (i = 0; i < st.snake.length - (eating ? 0 : 1); i++)
         if (st.snake[i].x === head.x && st.snake[i].y === head.y)
           return die(st, "You bumped into your own line");
     if (!effectActive(st, "ghost") && !effectActive(st, "shield"))
       for (i = 0; i < st.demons.length; i++)
         if (st.demons[i].x === head.x && st.demons[i].y === head.y)
           return die(st, "A little demon caught you");
+
+    if (st.rival) {
+      var ri = cellInList(st.rival.body, head.x, head.y);
+      if (ri === 0) {
+        if (!effectActive(st, "ghost") && !effectActive(st, "shield"))
+          return die(st, "The great demon caught you");
+      } else if (ri > 0 && st.rival.body.length > 3) {
+        // 撞到尾巴:从撞点到尾端的俘虏整段抢回(恶魔本体 3 节保留)
+        var keep = Math.max(3, ri);
+        var freed = st.rival.body.length - keep;
+        st.rival.body = st.rival.body.slice(0, keep);
+        while (freed-- > 0) {
+          st.snake.push({ x: st.snake[st.snake.length - 1].x, y: st.snake[st.snake.length - 1].y });
+          st.rescued++;
+        }
+        if (st.rescued >= quota(st.level)) { st.snake.unshift(head); st.mode = "clear"; return; }
+      }
+    }
 
     st.snake.unshift(head);
 
@@ -191,7 +230,7 @@ var Core = (function () {
   return {
     COLS: COLS, ROWS: ROWS, MAX_LEVEL: MAX_LEVEL,
     SKILLS: SKILLS, quota: quota, demonCount: demonCount,
-    demonsMove: demonsMove, demonsBlink: demonsBlink, hasSkills: hasSkills,
+    hasRival: hasRival, rivalEvery: rivalEvery, hasSkills: hasSkills,
     tickMs: tickMs, create: create, newLevel: newLevel, step: step,
     setDir: setDir, useSkill: useSkill, advance: advance, effectActive: effectActive
   };

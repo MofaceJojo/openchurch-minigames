@@ -150,9 +150,12 @@ var Render = (function () {
     ctx.strokeStyle = "#e3cf9e"; ctx.lineWidth = 3;
     ctx.strokeRect(1.5, top + 1.5, w - 3, h - top - 3);
 
-    // HUD
+    // HUD(有大恶魔时变成双方比分)
     text(ctx, "Lv " + st.level, 14, top / 2, 20, "#365a8c", "left", true);
-    text(ctx, "Saved " + st.rescued + " / " + C.quota(st.level), w / 2, top / 2, 20, "#3f7d5a", "center", true);
+    var captives = st.rival ? st.rival.body.length - 3 : 0;
+    text(ctx, st.rival ? "You " + st.rescued + "/" + C.quota(st.level) + " · Demon " + captives
+                       : "Saved " + st.rescued + " / " + C.quota(st.level),
+         w / 2, top / 2, st.rival ? 17 : 20, "#3f7d5a", "center", true);
     if (st.skill) text(ctx, C.SKILLS[st.skill].name, w - 14, top / 2, 18, "#b8860b", "right", true);
     else if (C.hasSkills(st.level)) text(ctx, "Skill: —", w - 14, top / 2, 18, "#b0a488", "right");
 
@@ -163,7 +166,21 @@ var Render = (function () {
     for (i = 0; i < st.believers.length; i++) { var b = cc(st.believers[i]); drawBeliever(ctx, b.x, b.y, r, t); }
     for (i = 0; i < st.demons.length; i++) {
       var d = cc(st.demons[i]);
-      drawDemon(ctx, d.x, d.y, r, t, st.demons[i].blinked && st.tickCount - st.demons[i].blinked < 8);
+      drawDemon(ctx, d.x, d.y, r, t, false);
+    }
+    if (st.rival) {
+      // 尾巴:第 3 节起是被掳的信徒(灰紫、哭脸),前 2 节是恶魔身体
+      for (i = st.rival.body.length - 1; i >= 1; i--) {
+        var seg = cc(st.rival.body[i]);
+        if (i >= 3) {
+          circle(ctx, seg.x, seg.y, r * 0.8, "#cbbfe3", "#8f7cc0", 2);
+          face(ctx, seg.x, seg.y, r * 0.8, false);
+        } else {
+          circle(ctx, seg.x, seg.y, r * 0.85, "#6b3bb8", "#4a2a86", 2.5);
+        }
+      }
+      var rh = cc(st.rival.body[0]);
+      drawDemon(ctx, rh.x, rh.y, r * 1.25, t, false);
     }
     var ghost = C.effectActive(st, "ghost");
     for (i = st.snake.length - 1; i >= 1; i--) { var s = cc(st.snake[i]); drawFollower(ctx, s.x, s.y, r * 0.88, i, ghost); }
@@ -191,8 +208,11 @@ var Render = (function () {
     } else if (st.mode === "intro") {
       var lines = ["Save " + C.quota(st.level) + " believers to clear the level"];
       if (C.demonCount(st.level) > 0) lines.push(C.demonCount(st.level) + " little demons — don't touch them!");
-      if (C.demonsMove(st.level)) lines.push("The demons are on the move!");
-      if (C.demonsBlink(st.level)) lines.push("The demons learned to teleport!");
+      if (C.hasRival(st.level)) {
+        lines.push("A great demon races you for believers!");
+        lines.push("Bump its tail to steal them back — avoid its head!");
+        if (C.rivalEvery(st.level) <= 2) lines.push("The great demon grows swift!");
+      }
       if (C.hasSkills(st.level)) lines.push("Grab the ⭐ for a skill, tap to use it");
       overlay(ctx, w, h, "Level " + st.level, lines, "Tap to set off");
     } else if (st.mode === "clear") {
