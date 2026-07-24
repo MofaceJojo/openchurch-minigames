@@ -12,10 +12,10 @@ var Core = (function () {
   function tickMs(level) { return Math.max(110, 170 - Math.floor(level * 1.2)); }
 
   var SKILLS = {
-    summon: { name: "呼召", desc: "附近的信徒立刻加入队伍" },
-    smite:  { name: "圣火", desc: "摧毁最近的一只小恶魔" },
-    shield: { name: "护佑", desc: "短时间内不怕小恶魔" },
-    ghost:  { name: "灵体", desc: "短时间内穿过队伍与恶魔" }
+    summon: { name: "Gather", desc: "Nearby believers join your line at once" },
+    smite:  { name: "Smite",  desc: "Destroy the nearest little demon" },
+    shield: { name: "Shield", desc: "Demons can't hurt you for a while" },
+    ghost:  { name: "Spirit", desc: "Pass through your line and demons" }
   };
   var SKILL_IDS = ["summon", "smite", "shield", "ghost"];
   var EFFECT_TICKS = 30; // 护佑/灵体持续拍数
@@ -135,15 +135,15 @@ var Core = (function () {
     var i;
 
     if (head.x < 0 || head.x >= COLS || head.y < 0 || head.y >= ROWS)
-      return die(st, "小天使飞出了禾场");
+      return die(st, "The little angel flew out of the field");
     if (!effectActive(st, "ghost"))
       for (i = 0; i < st.snake.length; i++)
         if (st.snake[i].x === head.x && st.snake[i].y === head.y)
-          return die(st, "撞到了自己的队伍");
+          return die(st, "You bumped into your own line");
     if (!effectActive(st, "ghost") && !effectActive(st, "shield"))
       for (i = 0; i < st.demons.length; i++)
         if (st.demons[i].x === head.x && st.demons[i].y === head.y)
-          return die(st, "被小恶魔抓住了");
+          return die(st, "A little demon caught you");
 
     st.snake.unshift(head);
 

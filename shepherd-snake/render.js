@@ -123,7 +123,7 @@ var Render = (function () {
 
   function text(ctx, str, x, y, size, color, align, bold) {
     ctx.fillStyle = color;
-    ctx.font = (bold ? "bold " : "") + size + 'px "PingFang SC", "Heiti SC", sans-serif';
+    ctx.font = (bold ? "bold " : "") + size + 'px "Trebuchet MS", "Verdana", sans-serif';
     ctx.textAlign = align || "center"; ctx.textBaseline = "middle";
     ctx.fillText(str, x, y);
   }
@@ -151,10 +151,10 @@ var Render = (function () {
     ctx.strokeRect(1.5, top + 1.5, w - 3, h - top - 3);
 
     // HUD
-    text(ctx, "第 " + st.level + " 关", 14, top / 2, 20, "#365a8c", "left", true);
-    text(ctx, "已救 " + st.rescued + " / " + C.quota(st.level), w / 2, top / 2, 20, "#3f7d5a", "center", true);
-    if (st.skill) text(ctx, "技能:" + C.SKILLS[st.skill].name, w - 14, top / 2, 18, "#b8860b", "right", true);
-    else if (C.hasSkills(st.level)) text(ctx, "技能:—", w - 14, top / 2, 18, "#b0a488", "right");
+    text(ctx, "Lv " + st.level, 14, top / 2, 20, "#365a8c", "left", true);
+    text(ctx, "Saved " + st.rescued + " / " + C.quota(st.level), w / 2, top / 2, 20, "#3f7d5a", "center", true);
+    if (st.skill) text(ctx, C.SKILLS[st.skill].name, w - 14, top / 2, 18, "#b8860b", "right", true);
+    else if (C.hasSkills(st.level)) text(ctx, "Skill: —", w - 14, top / 2, 18, "#b0a488", "right");
 
     function cc(p) { return { x: p.x * px + px / 2, y: top + p.y * px + px / 2 }; }
     var r = px * 0.42;
@@ -183,23 +183,23 @@ var Render = (function () {
 
     // 遮罩层
     if (st.mode === "menu") {
-      overlay(ctx, w, h, "✝ 牧者行列", [
-        "小天使带着小十字架,",
-        "把迷失的信徒一个个接回队伍。",
-        "方向键 / 滑动屏幕控制方向。"
-      ], "点击开始 · 从第 " + st.level + " 关继续");
+      overlay(ctx, w, h, "✝ Shepherd's Flock", [
+        "Lead the little angel and the cross,",
+        "gather lost believers into your line.",
+        "Arrow keys / swipe to steer."
+      ], "Tap to start · Level " + st.level);
     } else if (st.mode === "intro") {
-      var lines = ["救满 " + C.quota(st.level) + " 位信徒即可过关"];
-      if (C.demonCount(st.level) > 0) lines.push("场上有 " + C.demonCount(st.level) + " 只小恶魔,碰到会失败");
-      if (C.demonsMove(st.level)) lines.push("小恶魔开始移动了!");
-      if (C.demonsBlink(st.level)) lines.push("小恶魔学会了闪现!");
-      if (C.hasSkills(st.level)) lines.push("捡起 ⭐ 获得技能,点按钮释放");
-      overlay(ctx, w, h, "第 " + st.level + " 关", lines, "点击出发");
+      var lines = ["Save " + C.quota(st.level) + " believers to clear the level"];
+      if (C.demonCount(st.level) > 0) lines.push(C.demonCount(st.level) + " little demons — don't touch them!");
+      if (C.demonsMove(st.level)) lines.push("The demons are on the move!");
+      if (C.demonsBlink(st.level)) lines.push("The demons learned to teleport!");
+      if (C.hasSkills(st.level)) lines.push("Grab the ⭐ for a skill, tap to use it");
+      overlay(ctx, w, h, "Level " + st.level, lines, "Tap to set off");
     } else if (st.mode === "clear") {
-      overlay(ctx, w, h, "过关!", ["第 " + st.level + " 关 · 救回了 " + st.rescued + " 位信徒"],
-        st.level >= C.MAX_LEVEL ? "已通全部关卡!点击再玩" : "点击进入第 " + (st.level + 1) + " 关");
+      overlay(ctx, w, h, "Level Cleared!", ["Level " + st.level + " · " + st.rescued + " believers saved"],
+        st.level >= C.MAX_LEVEL ? "All 50 levels cleared! Tap to replay" : "Tap for level " + (st.level + 1));
     } else if (st.mode === "dead") {
-      overlay(ctx, w, h, "失败了…", [st.deathMsg, "已救 " + st.rescued + " / " + C.quota(st.level)], "点击重试第 " + st.level + " 关");
+      overlay(ctx, w, h, "Oh no…", [st.deathMsg, "Saved " + st.rescued + " / " + C.quota(st.level)], "Tap to retry level " + st.level);
     }
   }
 
