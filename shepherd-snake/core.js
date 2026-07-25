@@ -106,7 +106,7 @@ var Core = (function () {
         }
       }
       fillBelievers(st);
-      if (st.rescued >= quota(st.level)) st.mode = "clear";
+      if (st.rescued >= quota(st.level)) win(st);
       return { id: id, joined: joined };
     }
     if (id === "smite") {
@@ -162,10 +162,21 @@ var Core = (function () {
     st.deathMsg = msg;
     st.death = { kind: kind, at: at || { x: st.snake[0].x, y: st.snake[0].y }, since: 0, hitDir: st.dir };
   }
+  /* 过关:先进 cheering 播庆祝演出,再转 clear 出结算 */
+  var CHEER_MS = 2200;
+  function win(st) {
+    st.mode = "cheering";
+    st.cheer = { since: 0 };
+  }
+
   function tickDying(st, dtMs) {
-    if (st.mode !== "dying") return;
-    st.death.since += dtMs;
-    if (st.death.since >= DYING_MS) st.mode = "dead";
+    if (st.mode === "dying") {
+      st.death.since += dtMs;
+      if (st.death.since >= DYING_MS) st.mode = "dead";
+    } else if (st.mode === "cheering") {
+      st.cheer.since += dtMs;
+      if (st.cheer.since >= CHEER_MS) st.mode = "clear";
+    }
   }
 
   function step(st) {
@@ -206,7 +217,7 @@ var Core = (function () {
           st.snake.push({ x: st.snake[st.snake.length - 1].x, y: st.snake[st.snake.length - 1].y });
           st.rescued++;
         }
-        if (st.rescued >= quota(st.level)) { st.snake.unshift(head); st.mode = "clear"; return; }
+        if (st.rescued >= quota(st.level)) { st.snake.unshift(head); win(st); return; }
       }
     }
 
@@ -225,7 +236,7 @@ var Core = (function () {
     if (!ate) st.snake.pop();
     else {
       fillBelievers(st);
-      if (st.rescued >= quota(st.level)) st.mode = "clear";
+      if (st.rescued >= quota(st.level)) win(st);
     }
   }
 
@@ -244,7 +255,7 @@ var Core = (function () {
     COLS: COLS, ROWS: ROWS, MAX_LEVEL: MAX_LEVEL,
     SKILLS: SKILLS, quota: quota, demonCount: demonCount,
     hasRival: hasRival, rivalEvery: rivalEvery, hasSkills: hasSkills,
-    DYING_MS: DYING_MS, tickDying: tickDying,
+    DYING_MS: DYING_MS, CHEER_MS: CHEER_MS, tickDying: tickDying,
     tickMs: tickMs, create: create, newLevel: newLevel, step: step,
     setDir: setDir, useSkill: useSkill, advance: advance, effectActive: effectActive
   };

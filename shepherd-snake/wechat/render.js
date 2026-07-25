@@ -252,6 +252,113 @@ var Render = (function () {
     drawStars(ctx, cx, cy, r, p);
   }
 
+  /* ---------- 过关庆祝演出 ---------- */
+
+  var CONFETTI = ["#ffd24a", "#ff8fa3", "#7ec8ff", "#9ee493", "#c9a7ff", "#ffffff"];
+
+  function drawRays(ctx, cx, cy, r, p, t) {           // 身后绽放的圣光
+    var grow = Math.min(1, p / 0.35), fade = p > 0.8 ? 1 - (p - 0.8) / 0.2 : 1;
+    ctx.save();
+    ctx.globalAlpha = 0.5 * fade;
+    ctx.translate(cx, cy);
+    ctx.rotate(t * 0.6);
+    ctx.fillStyle = "#ffe9a8";
+    for (var i = 0; i < 12; i++) {
+      ctx.rotate(Math.PI / 6);
+      ctx.beginPath();
+      ctx.moveTo(0, 0);
+      ctx.lineTo(r * 0.55, -r * 9 * grow);
+      ctx.lineTo(-r * 0.55, -r * 9 * grow);
+      ctx.closePath(); ctx.fill();
+    }
+    ctx.restore();
+    ctx.save();
+    ctx.globalAlpha = 0.75 * fade;
+    var g = ctx.createRadialGradient(cx, cy, 0, cx, cy, r * 4 * grow);
+    g.addColorStop(0, "rgba(255,255,220,.95)");
+    g.addColorStop(0.5, "rgba(255,226,140,.4)");
+    g.addColorStop(1, "rgba(255,226,140,0)");
+    ctx.fillStyle = g;
+    ctx.beginPath(); ctx.arc(cx, cy, r * 4 * grow, 0, Math.PI * 2); ctx.fill();
+    ctx.restore();
+  }
+
+  function drawConfetti(ctx, w, h, p, seedN) {         // 从顶上飘落的彩纸
+    ctx.save();
+    for (var i = 0; i < seedN; i++) {
+      var sx = ((i * 97) % 100) / 100 * w;
+      var delay = ((i * 37) % 100) / 100 * 0.35;
+      var q = p - delay;
+      if (q <= 0) continue;
+      var y = -20 + q * (h + 60) * (0.75 + ((i * 13) % 50) / 100);
+      var x = sx + Math.sin(q * 6 + i) * 26;
+      ctx.save();
+      ctx.translate(x, y);
+      ctx.rotate(q * 9 + i);
+      ctx.globalAlpha = Math.max(0, Math.min(1, 1.3 - q));
+      ctx.fillStyle = CONFETTI[i % CONFETTI.length];
+      ctx.fillRect(-5, -3.5, 10, 7);
+      ctx.restore();
+    }
+    ctx.restore();
+  }
+
+  function drawCheer(ctx, C, st, w, h, top, px, r, t) {
+    var p = Math.min(1, st.cheer.since / C.CHEER_MS);
+    var cx = w / 2, cy = top + (h - top) * 0.42;
+
+    ctx.fillStyle = "rgba(255,250,225," + (0.7 * Math.min(1, p / 0.25)) + ")";
+    ctx.fillRect(0, top, w, h - top);
+
+    drawRays(ctx, cx, cy, r, p, t);
+
+    // 信徒围成一圈欢呼跳跃(从正下方起排,给天使和光环留出上方空间)
+    var n = 7, R = r * 5.6;
+    for (var i = 0; i < n; i++) {
+      var a = Math.PI / 2 + i * Math.PI * 2 / n;
+      var hop = Math.abs(Math.sin(t * 7 + i * 0.9)) * r * 0.75 * Math.min(1, p / 0.2);
+      var bx = cx + Math.cos(a) * R, by = cy + Math.sin(a) * R * 0.66 + r * 0.6 - hop;
+      var br = r * 0.8;
+      // 欢呼举起的双手(小圆手,和场上信徒同一套画法,避免看成犄角)
+      var wave = Math.sin(t * 9 + i) * br * 0.12;
+      circle(ctx, bx - br * 0.9, by - br * 0.72 + wave, br * 0.26, "#ffdba8", "#e0b070", 1.5);
+      circle(ctx, bx + br * 0.9, by - br * 0.72 - wave, br * 0.26, "#ffdba8", "#e0b070", 1.5);
+      circle(ctx, bx, by, br, "#ffe8b8", "#dfb267", 2.5);
+      face(ctx, bx, by, br, true);
+    }
+
+    // 天使腾空 + 欢喜蹦跳
+    var rise = Math.min(1, p / 0.45) * r * 1.4;
+    var bob = Math.sin(t * 6) * r * 0.18;
+    drawAngel(ctx, cx, cy - rise + bob, r * 1.45, t * 1.6, false);
+
+    drawConfetti(ctx, w, h, p, 34);
+
+    // 弹出的大字
+    if (p > 0.12) {
+      var q = Math.min(1, (p - 0.12) / 0.22);
+      var pop = q < 1 ? 0.4 + q * 0.75 : 1 + Math.sin((p - 0.34) * 9) * 0.04;
+      ctx.save();
+      ctx.translate(cx, top + (h - top) * 0.16);
+      ctx.scale(pop, pop);
+      ctx.rotate(-0.04);
+      ctx.lineJoin = "round";
+      ctx.strokeStyle = "#b26a00"; ctx.lineWidth = 7;
+      ctx.font = 'bold 40px "Trebuchet MS", Verdana, sans-serif';
+      ctx.textAlign = "center"; ctx.textBaseline = "middle";
+      ctx.strokeText("WELL DONE!", 0, 0);
+      ctx.fillStyle = "#ffd85e";
+      ctx.fillText("WELL DONE!", 0, 0);
+      ctx.restore();
+      if (p > 0.4) {
+        ctx.save();
+        ctx.globalAlpha = Math.min(1, (p - 0.4) / 0.2);
+        text(ctx, st.rescued + " believers brought home", cx, top + (h - top) * 0.26, 17, "#7a5a1e", "center", true);
+        ctx.restore();
+      }
+    }
+  }
+
   function drawDeath(ctx, C, st, cc, r, t) {
     var p = Math.min(1, st.death.since / C.DYING_MS);
     var at = cc(st.death.at), kind = st.death.kind;
@@ -302,13 +409,14 @@ var Render = (function () {
     function cc(p) { return { x: p.x * px + px / 2, y: top + p.y * px + px / 2 }; }
     var r = px * 0.42;
 
-    if (st.pickup) { var pk = cc(st.pickup); drawStar(ctx, pk.x, pk.y, r * 0.9, t); }
-    for (i = 0; i < st.believers.length; i++) { var b = cc(st.believers[i]); drawBeliever(ctx, b.x, b.y, r, t); }
-    for (i = 0; i < st.demons.length; i++) {
+    var cheering = st.mode === "cheering";
+    if (st.pickup && !cheering) { var pk = cc(st.pickup); drawStar(ctx, pk.x, pk.y, r * 0.9, t); }
+    if (!cheering) for (i = 0; i < st.believers.length; i++) { var b = cc(st.believers[i]); drawBeliever(ctx, b.x, b.y, r, t); }
+    if (!cheering) for (i = 0; i < st.demons.length; i++) {
       var d = cc(st.demons[i]);
       drawDemon(ctx, d.x, d.y, r, t, false);
     }
-    if (st.rival) {
+    if (st.rival && !cheering) {
       // 尾巴:第 3 节起是被掳的信徒(灰紫、哭脸),前 2 节是恶魔身体
       for (i = st.rival.body.length - 1; i >= 1; i--) {
         var seg = cc(st.rival.body[i]);
@@ -323,14 +431,16 @@ var Render = (function () {
       drawDemon(ctx, rh.x, rh.y, r * 1.25, t, false);
     }
     var ghost = C.effectActive(st, "ghost");
-    for (i = st.snake.length - 1; i >= 1; i--) { var s = cc(st.snake[i]); drawFollower(ctx, s.x, s.y, r * 0.88, i, ghost); }
+    if (!cheering) for (i = st.snake.length - 1; i >= 1; i--) { var s = cc(st.snake[i]); drawFollower(ctx, s.x, s.y, r * 0.88, i, ghost); }
     var hd = cc(st.snake[0]);
     if (C.effectActive(st, "shield")) {
       ctx.strokeStyle = "rgba(242,193,78,.85)"; ctx.lineWidth = 4;
       circle(ctx, hd.x, hd.y, r * 1.5 + Math.sin(t * 8) * 2, null, "rgba(242,193,78,.85)", 4);
     }
     if (st.mode === "dying") drawDeath(ctx, C, st, cc, r, t);
-    else drawAngel(ctx, hd.x, hd.y, r, t, ghost);
+    else if (st.mode !== "cheering") drawAngel(ctx, hd.x, hd.y, r, t, ghost);
+
+    if (st.mode === "cheering") drawCheer(ctx, C, st, w, h, top, px, r, t);
 
     // 技能按钮
     if (st.skill && st.mode === "play") {
