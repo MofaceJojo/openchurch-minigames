@@ -26,10 +26,10 @@ var Core = (function () {
   }
 
   var SKILLS = {
-    summon: { name: "Gather", desc: "Nearby believers join your line at once" },
-    smite:  { name: "Smite",  desc: "Destroy the nearest little demon" },
-    shield: { name: "Shield", desc: "Demons can't hurt you for a while" },
-    ghost:  { name: "Spirit", desc: "Pass through your line and demons" }
+    summon: { name: "Gather", desc: "Nearby believers join your line at once", color: "#2f9e63", dark: "#1d6b42" },
+    smite:  { name: "Smite",  desc: "Destroy the nearest little demon",        color: "#f4772b", dark: "#b34a0d" },
+    shield: { name: "Shield", desc: "Demons can't hurt you for a while",       color: "#3d8ee0", dark: "#1f5c9e" },
+    ghost:  { name: "Spirit", desc: "Pass through your line and demons",       color: "#9b6fd6", dark: "#6a3fa8" }
   };
   var SKILL_IDS = ["summon", "smite", "shield", "ghost"];
   var EFFECT_TICKS = 30; // 护佑/灵体持续拍数
@@ -70,7 +70,11 @@ var Core = (function () {
       : null;
     var i, n = demonCount(level);
     for (i = 0; i < n; i++) st.demons.push(freeCell(st, 5));
-    if (hasSkills(level)) st.pickup = freeCell(st, 4);
+    // 技能在开局就定好类型,拾取物据此显示图标 —— 玩家能提前判断值不值得绕路
+    if (hasSkills(level)) {
+      st.pickup = freeCell(st, 4);
+      st.pickupSkill = SKILL_IDS[(Math.random() * SKILL_IDS.length) | 0];
+    } else st.pickupSkill = null;
     fillBelievers(st);
     st.mode = "intro";
   }
@@ -224,7 +228,7 @@ var Core = (function () {
     st.snake.unshift(head);
 
     if (st.pickup && st.pickup.x === head.x && st.pickup.y === head.y) {
-      st.skill = SKILL_IDS[(Math.random() * SKILL_IDS.length) | 0];
+      st.skill = st.pickupSkill;
       st.skillTick = st.tickCount;   // 渲染层据此播"点这里用"提示
       st.pickup = null;
     }

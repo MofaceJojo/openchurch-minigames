@@ -125,6 +125,100 @@ var Render = (function () {
     ctx.restore();
   }
 
+  /* ---------- 四种技能:各自的图标 ---------- */
+
+  function iconGather(ctx, cx, cy, r, col, t) {   // 呼召:向内收拢的同心波纹 + 中心小人
+    ctx.strokeStyle = col; ctx.lineCap = "round";
+    for (var i = 0; i < 3; i++) {
+      var ph = (t * 0.9 + i / 3) % 1;             // 由外向内收
+      ctx.lineWidth = Math.max(1.6, r * 0.16);
+      ctx.globalAlpha = 0.25 + 0.75 * ph;
+      ctx.beginPath();
+      ctx.arc(cx, cy, r * (0.35 + (1 - ph) * 0.78), -0.72 * Math.PI, -0.28 * Math.PI); ctx.stroke();
+      ctx.beginPath();
+      ctx.arc(cx, cy, r * (0.35 + (1 - ph) * 0.78), 0.28 * Math.PI, 0.72 * Math.PI); ctx.stroke();
+    }
+    ctx.globalAlpha = 1;
+    circle(ctx, cx, cy, r * 0.3, col);
+  }
+
+  function iconSmite(ctx, cx, cy, r, col, t) {    // 圣火:跳动的火苗
+    var f = 1 + Math.sin(t * 8) * 0.08;
+    ctx.save(); ctx.translate(cx, cy); ctx.scale(1, f);
+    ctx.fillStyle = col;
+    ctx.beginPath();
+    ctx.moveTo(0, -r * 1.05);
+    ctx.bezierCurveTo(r * 0.82, -r * 0.2, r * 0.6, r * 0.95, 0, r * 0.95);
+    ctx.bezierCurveTo(-r * 0.6, r * 0.95, -r * 0.82, -r * 0.2, 0, -r * 1.05);
+    ctx.closePath(); ctx.fill();
+    ctx.fillStyle = "#ffe9a8";                    // 内焰
+    ctx.beginPath();
+    ctx.moveTo(0, -r * 0.3);
+    ctx.bezierCurveTo(r * 0.4, r * 0.12, r * 0.3, r * 0.72, 0, r * 0.72);
+    ctx.bezierCurveTo(-r * 0.3, r * 0.72, -r * 0.4, r * 0.12, 0, -r * 0.3);
+    ctx.closePath(); ctx.fill();
+    ctx.restore();
+  }
+
+  function iconShield(ctx, cx, cy, r, col, t) {   // 护佑:盾牌 + 十字
+    var g = 1 + Math.sin(t * 4) * 0.04;
+    ctx.save(); ctx.translate(cx, cy); ctx.scale(g, g);
+    ctx.fillStyle = col; ctx.strokeStyle = "#ffffff"; ctx.lineWidth = Math.max(1.5, r * 0.12);
+    ctx.beginPath();
+    ctx.moveTo(0, -r * 1.05);
+    ctx.lineTo(r * 0.85, -r * 0.62);
+    ctx.lineTo(r * 0.85, r * 0.18);
+    ctx.quadraticCurveTo(r * 0.8, r * 0.86, 0, r * 1.1);
+    ctx.quadraticCurveTo(-r * 0.8, r * 0.86, -r * 0.85, r * 0.18);
+    ctx.lineTo(-r * 0.85, -r * 0.62);
+    ctx.closePath(); ctx.fill(); ctx.stroke();
+    ctx.strokeStyle = "#ffffff"; ctx.lineWidth = Math.max(2, r * 0.2); ctx.lineCap = "round";
+    ctx.beginPath();
+    ctx.moveTo(0, -r * 0.5); ctx.lineTo(0, r * 0.55);
+    ctx.moveTo(-r * 0.36, -r * 0.12); ctx.lineTo(r * 0.36, -r * 0.12);
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  function iconGhost(ctx, cx, cy, r, col, t) {    // 灵体:半透明幽灵,底部波浪飘动
+    var bob = Math.sin(t * 3.5) * r * 0.1;
+    ctx.save(); ctx.globalAlpha = 0.85; ctx.translate(cx, cy + bob);
+    ctx.fillStyle = col;
+    ctx.beginPath();
+    ctx.arc(0, -r * 0.15, r * 0.88, Math.PI, 0);
+    ctx.lineTo(r * 0.88, r * 0.55);
+    for (var i = 0; i < 3; i++) {                 // 三个波浪裙边
+      var x0 = r * 0.88 - i * r * 0.586;
+      ctx.quadraticCurveTo(x0 - r * 0.146, r * 0.55 + (i % 2 ? -r * 0.3 : r * 0.34),
+                           x0 - r * 0.586, r * 0.55);
+    }
+    ctx.lineTo(-r * 0.88, -r * 0.15);
+    ctx.closePath(); ctx.fill();
+    ctx.fillStyle = "#ffffff";
+    circle(ctx, -r * 0.3, -r * 0.24, r * 0.19, "#ffffff");
+    circle(ctx, r * 0.3, -r * 0.24, r * 0.19, "#ffffff");
+    ctx.restore();
+  }
+
+  function drawSkillIcon(ctx, C, id, cx, cy, r, t) {
+    var col = C.SKILLS[id].color;
+    if (id === "summon") iconGather(ctx, cx, cy, r, col, t);
+    else if (id === "smite") iconSmite(ctx, cx, cy, r, col, t);
+    else if (id === "shield") iconShield(ctx, cx, cy, r, col, t);
+    else iconGhost(ctx, cx, cy, r, col, t);
+  }
+
+  function drawPickup(ctx, C, id, cx, cy, r, t) {  // 场上的技能拾取物:光晕托底 + 专属图标
+    var pulse = 0.5 + 0.5 * Math.sin(t * 4);
+    var col = C.SKILLS[id].color;
+    ctx.save();
+    ctx.globalAlpha = 0.2 + 0.22 * pulse;
+    circle(ctx, cx, cy, r * (1.35 + 0.22 * pulse), col);
+    ctx.restore();
+    circle(ctx, cx, cy, r * 1.02, "#fffdf2", C.SKILLS[id].dark, 2.5);
+    drawSkillIcon(ctx, C, id, cx, cy, r * 0.68, t);
+  }
+
   /* ---------- 死亡演出:三种死法三种搞笑动画 ---------- */
 
   function drawStars(ctx, cx, cy, r, p) {           // 头上转圈圈的小星星
@@ -407,14 +501,19 @@ var Render = (function () {
     text(ctx, st.rival ? "You " + st.rescued + "/" + C.quota(st.level) + " · Demon " + captives
                        : "Saved " + st.rescued + " / " + C.quota(st.level),
          w / 2, top / 2, st.rival ? 17 : 20, "#3f7d5a", "center", true);
-    if (st.skill) text(ctx, C.SKILLS[st.skill].name, w - 14, top / 2, 18, "#b8860b", "right", true);
-    else if (C.hasSkills(st.level)) text(ctx, "Skill: —", w - 14, top / 2, 18, "#b0a488", "right");
+    if (st.skill) {
+      text(ctx, C.SKILLS[st.skill].name, w - 14, top / 2, 18, C.SKILLS[st.skill].dark, "right", true);
+      drawSkillIcon(ctx, C, st.skill, w - 14 - ctx.measureText(C.SKILLS[st.skill].name).width - 16, top / 2, top * 0.26, t);
+    } else if (C.hasSkills(st.level)) text(ctx, "Skill: —", w - 14, top / 2, 18, "#b0a488", "right");
 
     function cc(p) { return { x: p.x * px + px / 2, y: top + p.y * px + px / 2 }; }
     var r = px * 0.42;
 
     var cheering = st.mode === "cheering";
-    if (st.pickup && !cheering) { var pk = cc(st.pickup); drawStar(ctx, pk.x, pk.y, r * 0.9, t); }
+    if (st.pickup && !cheering) {
+      var pk = cc(st.pickup);
+      drawPickup(ctx, C, st.pickupSkill || "summon", pk.x, pk.y, r * 0.9, t);
+    }
     if (!cheering) for (i = 0; i < st.believers.length; i++) { var b = cc(st.believers[i]); drawBeliever(ctx, b.x, b.y, r, t); }
     if (!cheering) for (i = 0; i < st.demons.length; i++) {
       var d = cc(st.demons[i]);
@@ -449,13 +548,14 @@ var Render = (function () {
     // 技能按钮:有技能时脉冲发光,刚捡到时飘一行提示
     if (st.skill && st.mode === "play") {
       var btn = skillBtn(C, px);
+      var sk0 = C.SKILLS[st.skill];
       var pulse = 0.5 + 0.5 * Math.sin(t * 5);
-      ctx.strokeStyle = "rgba(255,206,70," + (0.25 + 0.45 * pulse) + ")";
-      ctx.lineWidth = 3 + 4 * pulse;
-      circle(ctx, btn.x, btn.y, btn.r + 5 + 6 * pulse, null, ctx.strokeStyle, ctx.lineWidth);
-      circle(ctx, btn.x, btn.y, btn.r, "rgba(255,214,90,.96)", "#c98b2d", 3.5);
-      text(ctx, C.SKILLS[st.skill].name, btn.x, btn.y - btn.r * 0.16, btn.r * 0.46, "#6b4a08", "center", true);
-      text(ctx, "TAP", btn.x, btn.y + btn.r * 0.44, btn.r * 0.3, "#9a7420", "center", true);
+      ctx.strokeStyle = sk0.color; ctx.globalAlpha = 0.25 + 0.45 * pulse;
+      circle(ctx, btn.x, btn.y, btn.r + 5 + 6 * pulse, null, sk0.color, 3 + 4 * pulse);
+      ctx.globalAlpha = 1;
+      circle(ctx, btn.x, btn.y, btn.r, "#fffdf2", sk0.dark, 3.5);
+      drawSkillIcon(ctx, C, st.skill, btn.x, btn.y - btn.r * 0.22, btn.r * 0.5, t);
+      text(ctx, sk0.name.toUpperCase(), btn.x, btn.y + btn.r * 0.58, btn.r * 0.3, sk0.dark, "center", true);
 
       var fresh = st.skillTick != null ? st.tickCount - st.skillTick : 99;
       if (fresh < 22) {                       // 刚捡到:气泡说明技能作用 + 两种操作方式
@@ -467,12 +567,13 @@ var Render = (function () {
         var bx0 = Math.max(px * 0.4, btn.x - bw + btn.r * 0.5);
         var by0 = btn.y - btn.r - bh - 18 + bob;
         ctx.fillStyle = "#fffdf2"; rr(ctx, bx0, by0, bw, bh, 12); ctx.fill();
-        ctx.strokeStyle = "#c98b2d"; ctx.lineWidth = 2.5; ctx.stroke();
+        ctx.strokeStyle = sk.dark; ctx.lineWidth = 2.5; ctx.stroke();
         var mid = bx0 + bw / 2;
-        text(ctx, "SKILL: " + sk.name.toUpperCase(), mid, by0 + bh * 0.24, px * 0.56, "#8a6210", "center", true);
+        drawSkillIcon(ctx, C, st.skill, bx0 + px * 0.85, by0 + bh * 0.26, px * 0.42, t);
+        text(ctx, sk.name.toUpperCase(), mid + px * 0.5, by0 + bh * 0.24, px * 0.56, sk.dark, "center", true);
         text(ctx, sk.desc, mid, by0 + bh * 0.52, px * 0.42, "#7a6a4a");
         text(ctx, USE_HINT, mid, by0 + bh * 0.8, px * 0.46, "#3f7d5a", "center", true);
-        ctx.fillStyle = "#ffd85e"; ctx.strokeStyle = "#c98b2d";
+        ctx.fillStyle = sk.color; ctx.strokeStyle = sk.dark;
         ctx.beginPath();
         ctx.moveTo(btn.x, by0 + bh + 13); ctx.lineTo(btn.x - 8, by0 + bh + 1); ctx.lineTo(btn.x + 8, by0 + bh + 1);
         ctx.closePath(); ctx.fill(); ctx.stroke();
