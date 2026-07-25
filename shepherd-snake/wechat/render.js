@@ -6,7 +6,8 @@ var Render = (function () {
 
   // 释放技能的操作提示,由壳层按设备设定(触屏 / 键盘)
   var USE_HINT = "Press SPACE or tap the button";
-  function setUseHint(s) { USE_HINT = s; }
+  var RESUME_HINT = "Press any arrow key to continue";
+  function setUseHint(s, resume) { USE_HINT = s; if (resume) RESUME_HINT = resume; }
 
   function canvasSize(C, px) {
     return { w: C.COLS * px, h: (C.ROWS + HUD) * px };
@@ -669,7 +670,7 @@ var Render = (function () {
       text(ctx, USE_HINT, w / 2, cy0 + 232, 15, "#3f7d5a", "center", true);
       ctx.strokeStyle = "#eadfc4"; ctx.lineWidth = 1.5;
       ctx.beginPath(); ctx.moveTo(cx0 + 40, cy0 + 258); ctx.lineTo(cx0 + cw - 40, cy0 + 258); ctx.stroke();
-      text(ctx, "Tap to continue", w / 2, cy0 + ch - 24, 16, "#a08a5a", "center", true);
+      text(ctx, RESUME_HINT, w / 2, cy0 + ch - 24, 15, "#a08a5a", "center", true);
     }
 
     // 遮罩层

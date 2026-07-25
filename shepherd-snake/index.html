@@ -13,8 +13,8 @@
 </head>
 <body>
 <canvas id="cv"></canvas>
-<script src="core.js?v=16"></script>
-<script src="render.js?v=16"></script>
+<script src="core.js?v=17"></script>
+<script src="render.js?v=17"></script>
 <script>
 "use strict";
 const cv = document.getElementById("cv"), ctx = cv.getContext("2d");
@@ -26,9 +26,9 @@ try { seen = JSON.parse(localStorage.getItem("shepherd-seen-skills") || "{}"); }
 const st = Core.create(+(localStorage.getItem("shepherd-level") || 1), seen);
 
 // 触屏设备只提"点按钮",带键盘的设备提空格
-Render.setUseHint(matchMedia("(pointer: coarse)").matches
-  ? "Tap the button to use it"
-  : "Press SPACE or click the button");
+Render.setUseHint(
+  matchMedia("(pointer: coarse)").matches ? "Tap the button to use it" : "Press SPACE or click the button",
+  matchMedia("(pointer: coarse)").matches ? "Swipe or tap to continue" : "Press any arrow key to continue");
 
 function fit() {
   px = Math.floor(Math.min(
@@ -75,7 +75,14 @@ addEventListener("keydown", e => {
   }
   if (e.key === "Enter") { if (st.mode !== "play") Core.advance(st); return; }
   const v = DIRS[e.key];
-  if (v) { e.preventDefault(); if (st.mode === "play") Core.setDir(st, v[0], v[1]); }
+  if (v) {
+    e.preventDefault();
+    // 暂停画面(关卡说明 / 技能讲解)按方向键 = 直接继续并朝该方向走
+    if (st.mode === "skillIntro" || st.mode === "intro") {
+      Core.advance(st); lastTick = performance.now();
+    }
+    if (st.mode === "play") Core.setDir(st, v[0], v[1]);
+  }
 });
 
 cv.addEventListener("pointerdown", e => { cv._p = { x: e.offsetX, y: e.offsetY }; });
@@ -83,6 +90,8 @@ cv.addEventListener("pointerup", e => {
   const p = cv._p; if (!p) return; cv._p = null;
   const dx = e.offsetX - p.x, dy = e.offsetY - p.y;
   if (Math.abs(dx) < 16 && Math.abs(dy) < 16) return confirmOrSkill(e.offsetX, e.offsetY);
+  // 暂停画面滑动 = 继续并朝该方向走
+  if (st.mode === "skillIntro" || st.mode === "intro") { Core.advance(st); lastTick = performance.now(); }
   if (st.mode !== "play") return;
   const v = Math.abs(dx) > Math.abs(dy) ? [Math.sign(dx), 0] : [0, Math.sign(dy)];
   Core.setDir(st, v[0], v[1]);

@@ -20,7 +20,7 @@ var offX = (info.windowWidth - sz.w) / 2, offY = (info.windowHeight - sz.h) / 2;
 
 var st = Core.create(+(wx.getStorageSync("shepherd-level") || 1),
                      wx.getStorageSync("shepherd-seen-skills") || {});
-Render.setUseHint("Tap the button to use it");
+Render.setUseHint("Tap the button to use it", "Swipe or tap to continue");
 
 var lastTick = 0, lastFrame = 0;
 function loop(now) {
@@ -56,6 +56,8 @@ wx.onTouchEnd(function (e) {
     if (st.skill && d2 <= b.r * b.r * 1.7) Core.useSkill(st);
     return;
   }
+  // 暂停画面滑动 = 继续并朝该方向走
+  if (st.mode === "skillIntro" || st.mode === "intro") { Core.advance(st); lastTick = Date.now(); }
   if (st.mode !== "play") return;
   var v = Math.abs(dx) > Math.abs(dy) ? [dx > 0 ? 1 : -1, 0] : [0, dy > 0 ? 1 : -1];
   Core.setDir(st, v[0], v[1]);
