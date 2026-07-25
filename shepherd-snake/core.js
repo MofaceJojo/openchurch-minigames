@@ -225,6 +225,7 @@ var Core = (function () {
 
     if (st.pickup && st.pickup.x === head.x && st.pickup.y === head.y) {
       st.skill = SKILL_IDS[(Math.random() * SKILL_IDS.length) | 0];
+      st.skillTick = st.tickCount;   // 渲染层据此播"点这里用"提示
       st.pickup = null;
     }
 

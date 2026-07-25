@@ -442,11 +442,32 @@ var Render = (function () {
 
     if (st.mode === "cheering") drawCheer(ctx, C, st, w, h, top, px, r, t);
 
-    // 技能按钮
+    // 技能按钮:有技能时脉冲发光,刚捡到时飘一行提示
     if (st.skill && st.mode === "play") {
       var btn = skillBtn(C, px);
-      circle(ctx, btn.x, btn.y, btn.r, "rgba(255,214,90,.92)", "#c98b2d", 3);
-      text(ctx, C.SKILLS[st.skill].name, btn.x, btn.y, btn.r * 0.5, "#6b4a08", "center", true);
+      var pulse = 0.5 + 0.5 * Math.sin(t * 5);
+      ctx.strokeStyle = "rgba(255,206,70," + (0.25 + 0.45 * pulse) + ")";
+      ctx.lineWidth = 3 + 4 * pulse;
+      circle(ctx, btn.x, btn.y, btn.r + 5 + 6 * pulse, null, ctx.strokeStyle, ctx.lineWidth);
+      circle(ctx, btn.x, btn.y, btn.r, "rgba(255,214,90,.96)", "#c98b2d", 3.5);
+      text(ctx, C.SKILLS[st.skill].name, btn.x, btn.y - btn.r * 0.16, btn.r * 0.46, "#6b4a08", "center", true);
+      text(ctx, "TAP", btn.x, btn.y + btn.r * 0.44, btn.r * 0.3, "#9a7420", "center", true);
+
+      var fresh = st.skillTick != null ? st.tickCount - st.skillTick : 99;
+      if (fresh < 16) {                       // 刚捡到:气泡提示 + 指向箭头
+        var fade = fresh > 11 ? 1 - (fresh - 11) / 5 : 1;
+        var bob = Math.sin(t * 6) * 4;
+        ctx.save(); ctx.globalAlpha = fade;
+        var bw = px * 5.6, bh = px * 1.5, bx0 = btn.x - bw + btn.r * 0.4, by0 = btn.y - btn.r - bh - 16 + bob;
+        ctx.fillStyle = "#fffdf2"; rr(ctx, bx0, by0, bw, bh, 10); ctx.fill();
+        ctx.strokeStyle = "#c98b2d"; ctx.lineWidth = 2.5; ctx.stroke();
+        text(ctx, "Skill ready — tap!", bx0 + bw / 2, by0 + bh / 2, px * 0.5, "#8a6210", "center", true);
+        ctx.fillStyle = "#ffd85e"; ctx.strokeStyle = "#c98b2d";
+        ctx.beginPath();
+        ctx.moveTo(btn.x, by0 + bh + 13); ctx.lineTo(btn.x - 8, by0 + bh + 1); ctx.lineTo(btn.x + 8, by0 + bh + 1);
+        ctx.closePath(); ctx.fill(); ctx.stroke();
+        ctx.restore();
+      }
     }
 
     // 遮罩层
