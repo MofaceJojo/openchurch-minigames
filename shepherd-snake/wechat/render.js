@@ -208,6 +208,35 @@ var Render = (function () {
     else iconGhost(ctx, cx, cy, r, col, t);
   }
 
+  /* 救到一人:光环扩散 + 小星花四射 + "+1" 上飘。短促(0.62s)不打断节奏 */
+  function drawRescueFx(ctx, C, fx, cx, cy, r, t) {
+    var p = Math.min(1, fx.since / C.RESCUE_FX_MS), i;
+    var fade = 1 - p;
+    ctx.save();
+    // 扩散光环
+    ctx.strokeStyle = "rgba(255,214,90," + (0.85 * fade) + ")";
+    ctx.lineWidth = 3.5 * fade + 1;
+    circle(ctx, cx, cy, r * (0.7 + p * 1.9), null, ctx.strokeStyle, ctx.lineWidth);
+    // 内层暖光
+    ctx.globalAlpha = 0.5 * fade;
+    circle(ctx, cx, cy, r * (0.5 + p * 1.1), "#fff3c4");
+    ctx.globalAlpha = 1;
+    // 四射小星花
+    for (i = 0; i < 6; i++) {
+      var a = i * Math.PI / 3 + 0.4;
+      var d = r * (0.6 + p * 2.1);
+      ctx.globalAlpha = fade;
+      drawStar(ctx, cx + Math.cos(a) * d, cy + Math.sin(a) * d, r * 0.26 * (1 - p * 0.5), t * 2 + i);
+    }
+    ctx.globalAlpha = 1;
+    ctx.restore();
+    // "+1" 上飘
+    ctx.save();
+    ctx.globalAlpha = p > 0.65 ? (1 - p) / 0.35 : 1;
+    text(ctx, "+1", cx, cy - r * (1.2 + p * 1.8), r * 1.05, "#e08a1e", "center", true);
+    ctx.restore();
+  }
+
   function drawPickup(ctx, C, id, cx, cy, r, t) {  // 场上的技能拾取物:光晕托底 + 专属图标
     var pulse = 0.5 + 0.5 * Math.sin(t * 4);
     var col = C.SKILLS[id].color;
@@ -484,6 +513,40 @@ var Render = (function () {
     text(ctx, hint, w / 2, py0 + ph - 38, 17, "#3f7d5a", "center", true);
   }
 
+  /* 菜单页的关卡选择:每 5 关一格,点了直接从那关开始(方便测试与重玩) */
+  var PICK_LEVELS = [1, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50];
+  function levelPickerHit(C, w, h, px, x, y) {
+    var g = pickerGeom(w, h, px), i;
+    for (i = 0; i < PICK_LEVELS.length; i++) {
+      var c = pickerCell(g, i);
+      if (x >= c.x && x <= c.x + g.cw && y >= c.y && y <= c.y + g.chh) return PICK_LEVELS[i];
+    }
+    return 0;
+  }
+  function pickerGeom(w, h, px) {
+    var cols = 6, cw = Math.min(px * 1.6, (w - px) / cols - 6), chh = cw * 0.72;
+    var gapx = 6, gapy = 6;
+    var totalW = cols * cw + (cols - 1) * gapx;
+    return { cols: cols, cw: cw, chh: chh, gapx: gapx, gapy: gapy,
+             x0: (w - totalW) / 2, y0: h - chh * 2 - gapy - px * 0.9 };
+  }
+  function pickerCell(g, i) {
+    return { x: g.x0 + (i % g.cols) * (g.cw + g.gapx),
+             y: g.y0 + Math.floor(i / g.cols) * (g.chh + g.gapy) };
+  }
+  function drawLevelPicker(ctx, C, st, w, h, px) {
+    var g = pickerGeom(w, h, px), i;
+    text(ctx, "Jump to level", w / 2, g.y0 - 14, 13, "#e8dcc0", "center", true);
+    for (i = 0; i < PICK_LEVELS.length; i++) {
+      var lv = PICK_LEVELS[i], c = pickerCell(g, i), cur = lv === st.level;
+      ctx.fillStyle = cur ? "#3f7d5a" : "rgba(255,253,246,.92)";
+      rr(ctx, c.x, c.y, g.cw, g.chh, 7); ctx.fill();
+      ctx.strokeStyle = cur ? "#2c5c41" : "#c9b78e"; ctx.lineWidth = 2; ctx.stroke();
+      text(ctx, String(lv), c.x + g.cw / 2, c.y + g.chh / 2, g.chh * 0.5,
+           cur ? "#ffffff" : "#6a5c44", "center", true);
+    }
+  }
+
   function draw(ctx, C, st, px, t) {
     var sz = canvasSize(C, px), w = sz.w, h = sz.h, top = HUD * px, i;
 
@@ -543,10 +606,15 @@ var Render = (function () {
     if (st.mode === "dying") drawDeath(ctx, C, st, cc, r, t);
     else if (st.mode !== "cheering") drawAngel(ctx, hd.x, hd.y, r, t, ghost);
 
+    if (st.rescueFx && !cheering) {
+      var fxp = cc(st.rescueFx);
+      drawRescueFx(ctx, C, st.rescueFx, fxp.x, fxp.y, r, t);
+    }
+
     if (st.mode === "cheering") drawCheer(ctx, C, st, w, h, top, px, r, t);
 
     // 技能按钮:有技能时脉冲发光,刚捡到时飘一行提示
-    if (st.skill && st.mode === "play") {
+    if (st.skill && (st.mode === "play" || st.mode === "skillIntro")) {
       var btn = skillBtn(C, px);
       var sk0 = C.SKILLS[st.skill];
       var pulse = 0.5 + 0.5 * Math.sin(t * 5);
@@ -558,7 +626,7 @@ var Render = (function () {
       text(ctx, sk0.name.toUpperCase(), btn.x, btn.y + btn.r * 0.58, btn.r * 0.3, sk0.dark, "center", true);
 
       var fresh = st.skillTick != null ? st.tickCount - st.skillTick : 99;
-      if (fresh < 22) {                       // 刚捡到:气泡说明技能作用 + 两种操作方式
+      if (fresh < 22 && st.mode === "play") { // 刚捡到:气泡说明技能作用 + 两种操作方式
         var fade = fresh > 17 ? 1 - (fresh - 17) / 5 : 1;
         var bob = Math.sin(t * 6) * 4;
         var sk = C.SKILLS[st.skill];
@@ -581,6 +649,29 @@ var Render = (function () {
       }
     }
 
+    // 首次获得某技能:暂停全屏讲解,点一下继续
+    if (st.mode === "skillIntro" && st.skill) {
+      var sn = C.SKILLS[st.skill];
+      ctx.fillStyle = "rgba(43,34,20,.55)"; ctx.fillRect(0, 0, w, h);
+      var cw = Math.min(w * 0.88, 340), ch = 306;
+      var cx0 = (w - cw) / 2, cy0 = (h - ch) / 2;
+      ctx.fillStyle = "#fffdf6"; rr(ctx, cx0, cy0, cw, ch, 20); ctx.fill();
+      ctx.strokeStyle = sn.color; ctx.lineWidth = 4; ctx.stroke();
+      text(ctx, "NEW SKILL!", w / 2, cy0 + 36, 17, "#9a8a6a", "center", true);
+      // 大图标 + 呼吸光晕
+      var gp = 0.5 + 0.5 * Math.sin(t * 4);
+      ctx.globalAlpha = 0.18 + 0.14 * gp;
+      circle(ctx, w / 2, cy0 + 104, 46 + 6 * gp, sn.color);
+      ctx.globalAlpha = 1;
+      drawSkillIcon(ctx, C, st.skill, w / 2, cy0 + 104, 34, t);
+      text(ctx, sn.name.toUpperCase(), w / 2, cy0 + 168, 27, sn.dark, "center", true);
+      text(ctx, sn.desc, w / 2, cy0 + 200, 15, "#6a5c44");
+      text(ctx, USE_HINT, w / 2, cy0 + 232, 15, "#3f7d5a", "center", true);
+      ctx.strokeStyle = "#eadfc4"; ctx.lineWidth = 1.5;
+      ctx.beginPath(); ctx.moveTo(cx0 + 40, cy0 + 258); ctx.lineTo(cx0 + cw - 40, cy0 + 258); ctx.stroke();
+      text(ctx, "Tap to continue", w / 2, cy0 + ch - 24, 16, "#a08a5a", "center", true);
+    }
+
     // 遮罩层
     if (st.mode === "menu") {
       overlay(ctx, w, h, "✝ Shepherd's Flock", [
@@ -588,6 +679,7 @@ var Render = (function () {
         "gather lost believers into your line.",
         "Arrow keys / swipe to steer."
       ], "Tap to start · Level " + st.level);
+      drawLevelPicker(ctx, C, st, w, h, px);
     } else if (st.mode === "intro") {
       var lines = ["Save " + C.quota(st.level) + " believers to clear the level"];
       if (C.demonCount(st.level) > 0) lines.push(C.demonCount(st.level) + " little demons — don't touch them!");
@@ -606,7 +698,8 @@ var Render = (function () {
     }
   }
 
-  return { HUD: HUD, canvasSize: canvasSize, skillBtn: skillBtn, draw: draw, setUseHint: setUseHint };
+  return { HUD: HUD, canvasSize: canvasSize, skillBtn: skillBtn, draw: draw,
+           setUseHint: setUseHint, levelPickerHit: levelPickerHit };
 })();
 
 if (typeof module !== "undefined") module.exports = Render;

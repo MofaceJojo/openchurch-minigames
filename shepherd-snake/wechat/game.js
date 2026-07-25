@@ -18,7 +18,8 @@ canvas.height = sz.h * dpr;
 ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 var offX = (info.windowWidth - sz.w) / 2, offY = (info.windowHeight - sz.h) / 2;
 
-var st = Core.create(+(wx.getStorageSync("shepherd-level") || 1));
+var st = Core.create(+(wx.getStorageSync("shepherd-level") || 1),
+                     wx.getStorageSync("shepherd-seen-skills") || {});
 Render.setUseHint("Tap the button to use it");
 
 var lastTick = 0, lastFrame = 0;
@@ -28,7 +29,8 @@ function loop(now) {
   if (st.mode === "play" && now - lastTick >= Core.tickMs(st.level)) {
     lastTick = now;
     Core.step(st);
-    if (st.mode === "clear") wx.setStorageSync("shepherd-level", Math.min(st.level + 1, Core.MAX_LEVEL));
+    if (st.mode === "cheering") wx.setStorageSync("shepherd-level", Math.min(st.level + 1, Core.MAX_LEVEL));
+    if (st.mode === "skillIntro") wx.setStorageSync("shepherd-seen-skills", st.seenSkills);
   }
   Core.tickDying(st, dt);
   Render.draw(ctx, Core, st, px, now / 1000);

@@ -64,7 +64,7 @@ var Core = (function () {
     st.snake = [{ x: 5, y: 8 }, { x: 5, y: 9 }, { x: 5, y: 10 }];
     st.dir = { x: 0, y: -1 }; st.nextDir = st.dir;
     st.demons = []; st.believers = []; st.pickup = null;
-    st.skill = null; st.effect = null; st.tickCount = 0;
+    st.skill = null; st.effect = null; st.tickCount = 0; st.rescueFx = null;
     st.rival = hasRival(level)
       ? { body: [{ x: COLS - 2, y: 1 }, { x: COLS - 1, y: 1 }, { x: COLS - 1, y: 0 }] }
       : null;
@@ -79,8 +79,9 @@ var Core = (function () {
     st.mode = "intro";
   }
 
-  function create(savedLevel) {
-    var st = { mode: "menu", best: savedLevel || 1, deathMsg: "" };
+  function create(savedLevel, seenSkills) {
+    // seenSkills 跨关卡保留:每种技能只在第一次拿到时暂停讲解一次
+    var st = { mode: "menu", best: savedLevel || 1, deathMsg: "", seenSkills: seenSkills || {} };
     newLevel(st, st.best);
     st.mode = "menu";
     return st;
@@ -173,7 +174,12 @@ var Core = (function () {
     st.cheer = { since: 0 };
   }
 
+  var RESCUE_FX_MS = 620;
   function tickDying(st, dtMs) {
+    if (st.rescueFx) {
+      st.rescueFx.since += dtMs;
+      if (st.rescueFx.since >= RESCUE_FX_MS) st.rescueFx = null;
+    }
     if (st.mode === "dying") {
       st.death.since += dtMs;
       if (st.death.since >= DYING_MS) st.mode = "dead";
@@ -231,12 +237,19 @@ var Core = (function () {
       st.skill = st.pickupSkill;
       st.skillTick = st.tickCount;   // 渲染层据此播"点这里用"提示
       st.pickup = null;
+      // 这个技能第一次拿到 → 暂停,让玩家看完说明再继续
+      if (!st.seenSkills[st.skill]) {
+        st.seenSkills[st.skill] = true;
+        st.mode = "skillIntro";
+      }
     }
 
     var ate = false;
     for (i = 0; i < st.believers.length; i++)
       if (st.believers[i].x === head.x && st.believers[i].y === head.y) {
-        st.believers.splice(i, 1); st.rescued++; ate = true; break;
+        st.believers.splice(i, 1); st.rescued++; ate = true;
+        st.rescueFx = { x: head.x, y: head.y, since: 0, n: st.rescued };  // 救人小特效
+        break;
       }
     if (!ate) st.snake.pop();
     else {
@@ -245,8 +258,9 @@ var Core = (function () {
     }
   }
 
-  /* 交互推进:menu→intro→play,clear→下一关 intro,dead→重试本关 */
+  /* 交互推进:menu→intro→play,clear→下一关 intro,dead→重试本关,skillIntro→继续本局 */
   function advance(st) {
+    if (st.mode === "skillIntro") { st.mode = "play"; return; }
     if (st.mode === "menu" || st.mode === "clear" || st.mode === "dead") {
       var lv = st.mode === "clear" ? Math.min(st.level + 1, MAX_LEVEL) : st.level;
       if (lv > st.best) st.best = lv;
@@ -260,7 +274,7 @@ var Core = (function () {
     COLS: COLS, ROWS: ROWS, MAX_LEVEL: MAX_LEVEL,
     SKILLS: SKILLS, quota: quota, demonCount: demonCount,
     hasRival: hasRival, rivalEvery: rivalEvery, hasSkills: hasSkills,
-    DYING_MS: DYING_MS, CHEER_MS: CHEER_MS, tickDying: tickDying,
+    DYING_MS: DYING_MS, CHEER_MS: CHEER_MS, RESCUE_FX_MS: RESCUE_FX_MS, tickDying: tickDying,
     tickMs: tickMs, create: create, newLevel: newLevel, step: step,
     setDir: setDir, useSkill: useSkill, advance: advance, effectActive: effectActive
   };

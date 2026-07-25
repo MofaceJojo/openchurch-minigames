@@ -13,15 +13,17 @@
 </head>
 <body>
 <canvas id="cv"></canvas>
-<script src="core.js?v=13"></script>
-<script src="render.js?v=13"></script>
+<script src="core.js?v=16"></script>
+<script src="render.js?v=16"></script>
 <script>
 "use strict";
 const cv = document.getElementById("cv"), ctx = cv.getContext("2d");
 const dpr = Math.min(2, window.devicePixelRatio || 1);
 let px = 30;
 
-const st = Core.create(+(localStorage.getItem("shepherd-level") || 1));
+let seen = {};
+try { seen = JSON.parse(localStorage.getItem("shepherd-seen-skills") || "{}"); } catch (e) {}
+const st = Core.create(+(localStorage.getItem("shepherd-level") || 1), seen);
 
 // 触屏设备只提"点按钮",带键盘的设备提空格
 Render.setUseHint(matchMedia("(pointer: coarse)").matches
@@ -47,7 +49,8 @@ function loop(now) {
   if (st.mode === "play" && now - lastTick >= Core.tickMs(st.level)) {
     lastTick = now;
     Core.step(st);
-    if (st.mode === "clear") localStorage.setItem("shepherd-level", Math.min(st.level + 1, Core.MAX_LEVEL));
+    if (st.mode === "cheering") localStorage.setItem("shepherd-level", Math.min(st.level + 1, Core.MAX_LEVEL));
+    if (st.mode === "skillIntro") localStorage.setItem("shepherd-seen-skills", JSON.stringify(st.seenSkills));
   }
   Core.tickDying(st, dt);
   Render.draw(ctx, Core, st, px, now / 1000);
@@ -56,6 +59,10 @@ function loop(now) {
 requestAnimationFrame(loop);
 
 function confirmOrSkill(x, y) {
+  if (st.mode === "menu") {                       // 菜单页:点关卡格子直接跳过去
+    const lv = Render.levelPickerHit(Core, cv.clientWidth, cv.clientHeight, px, x, y);
+    if (lv) { Core.newLevel(st, lv); localStorage.setItem("shepherd-level", lv); lastTick = performance.now(); return; }
+  }
   if (st.mode !== "play") { Core.advance(st); lastTick = performance.now(); return; }
   const b = Render.skillBtn(Core, px);
   if (st.skill && (x - b.x) ** 2 + (y - b.y) ** 2 <= (b.r * 1.3) ** 2) Core.useSkill(st);
