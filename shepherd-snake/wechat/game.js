@@ -19,6 +19,7 @@ ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 var offX = (info.windowWidth - sz.w) / 2, offY = (info.windowHeight - sz.h) / 2;
 
 var st = Core.create(+(wx.getStorageSync("shepherd-level") || 1));
+Render.setUseHint("Tap the button to use it");
 
 var lastTick = 0, lastFrame = 0;
 function loop(now) {

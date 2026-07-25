@@ -4,6 +4,10 @@
 var Render = (function () {
   var HUD = 1.5; // HUD 高度 = 1.5 个格子
 
+  // 释放技能的操作提示,由壳层按设备设定(触屏 / 键盘)
+  var USE_HINT = "Press SPACE or tap the button";
+  function setUseHint(s) { USE_HINT = s; }
+
   function canvasSize(C, px) {
     return { w: C.COLS * px, h: (C.ROWS + HUD) * px };
   }
@@ -454,14 +458,20 @@ var Render = (function () {
       text(ctx, "TAP", btn.x, btn.y + btn.r * 0.44, btn.r * 0.3, "#9a7420", "center", true);
 
       var fresh = st.skillTick != null ? st.tickCount - st.skillTick : 99;
-      if (fresh < 16) {                       // 刚捡到:气泡提示 + 指向箭头
-        var fade = fresh > 11 ? 1 - (fresh - 11) / 5 : 1;
+      if (fresh < 22) {                       // 刚捡到:气泡说明技能作用 + 两种操作方式
+        var fade = fresh > 17 ? 1 - (fresh - 17) / 5 : 1;
         var bob = Math.sin(t * 6) * 4;
+        var sk = C.SKILLS[st.skill];
         ctx.save(); ctx.globalAlpha = fade;
-        var bw = px * 5.6, bh = px * 1.5, bx0 = btn.x - bw + btn.r * 0.4, by0 = btn.y - btn.r - bh - 16 + bob;
-        ctx.fillStyle = "#fffdf2"; rr(ctx, bx0, by0, bw, bh, 10); ctx.fill();
+        var bw = Math.min(w - px * 0.8, px * 9), bh = px * 3.1;
+        var bx0 = Math.max(px * 0.4, btn.x - bw + btn.r * 0.5);
+        var by0 = btn.y - btn.r - bh - 18 + bob;
+        ctx.fillStyle = "#fffdf2"; rr(ctx, bx0, by0, bw, bh, 12); ctx.fill();
         ctx.strokeStyle = "#c98b2d"; ctx.lineWidth = 2.5; ctx.stroke();
-        text(ctx, "Skill ready — tap!", bx0 + bw / 2, by0 + bh / 2, px * 0.5, "#8a6210", "center", true);
+        var mid = bx0 + bw / 2;
+        text(ctx, "SKILL: " + sk.name.toUpperCase(), mid, by0 + bh * 0.24, px * 0.56, "#8a6210", "center", true);
+        text(ctx, sk.desc, mid, by0 + bh * 0.52, px * 0.42, "#7a6a4a");
+        text(ctx, USE_HINT, mid, by0 + bh * 0.8, px * 0.46, "#3f7d5a", "center", true);
         ctx.fillStyle = "#ffd85e"; ctx.strokeStyle = "#c98b2d";
         ctx.beginPath();
         ctx.moveTo(btn.x, by0 + bh + 13); ctx.lineTo(btn.x - 8, by0 + bh + 1); ctx.lineTo(btn.x + 8, by0 + bh + 1);
@@ -485,7 +495,7 @@ var Render = (function () {
         lines.push("Bump its tail to steal them back — avoid its head!");
         if (C.rivalEvery(st.level) <= 2) lines.push("The great demon grows swift!");
       }
-      if (C.hasSkills(st.level)) lines.push("Grab the ⭐ for a skill, tap to use it");
+      if (C.hasSkills(st.level)) lines.push("Grab the ⭐ for a skill — " + USE_HINT.toLowerCase());
       overlay(ctx, w, h, "Level " + st.level, lines, "Tap to set off");
     } else if (st.mode === "clear") {
       overlay(ctx, w, h, "Level Cleared!", ["Level " + st.level + " · " + st.rescued + " believers saved"],
@@ -495,7 +505,7 @@ var Render = (function () {
     }
   }
 
-  return { HUD: HUD, canvasSize: canvasSize, skillBtn: skillBtn, draw: draw };
+  return { HUD: HUD, canvasSize: canvasSize, skillBtn: skillBtn, draw: draw, setUseHint: setUseHint };
 })();
 
 if (typeof module !== "undefined") module.exports = Render;
