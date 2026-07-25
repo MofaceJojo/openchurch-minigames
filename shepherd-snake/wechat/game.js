@@ -20,13 +20,16 @@ var offX = (info.windowWidth - sz.w) / 2, offY = (info.windowHeight - sz.h) / 2;
 
 var st = Core.create(+(wx.getStorageSync("shepherd-level") || 1));
 
-var lastTick = 0;
+var lastTick = 0, lastFrame = 0;
 function loop(now) {
+  var dt = lastFrame ? now - lastFrame : 16;
+  lastFrame = now;
   if (st.mode === "play" && now - lastTick >= Core.tickMs(st.level)) {
     lastTick = now;
     Core.step(st);
     if (st.mode === "clear") wx.setStorageSync("shepherd-level", Math.min(st.level + 1, Core.MAX_LEVEL));
   }
+  Core.tickDying(st, dt);
   Render.draw(ctx, Core, st, px, now / 1000);
   requestAnimationFrame(loop);
 }

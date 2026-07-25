@@ -121,6 +121,146 @@ var Render = (function () {
     ctx.restore();
   }
 
+  /* ---------- 死亡演出:三种死法三种搞笑动画 ---------- */
+
+  function drawStars(ctx, cx, cy, r, p) {           // 头上转圈圈的小星星
+    for (var i = 0; i < 3; i++) {
+      var a = p * 7 + i * Math.PI * 2 / 3;
+      drawStar(ctx, cx + Math.cos(a) * r * 1.5, cy - r * 1.5 + Math.sin(a) * r * 0.45, r * 0.3, p * 4);
+    }
+  }
+
+  function drawSquashedAngel(ctx, cx, cy, r, p, dir) {
+    // 撞墙:压扁 → 弹回 → 眩晕转星星
+    var squash = p < 0.28 ? 1 - 0.65 * (p / 0.28) : Math.min(1, 0.35 + (p - 0.28) / 0.3 * 0.65);
+    var back = p < 0.28 ? 0 : Math.min(1, (p - 0.28) / 0.45) * r * 1.6;
+    var horiz = Math.abs(dir.x) > Math.abs(dir.y);
+    cx -= (dir.x || 0) * back; cy -= (dir.y || 0) * back;
+    ctx.save();
+    ctx.translate(cx, cy);
+    ctx.scale(horiz ? squash : 1 / squash * 0.85, horiz ? 1 / squash * 0.85 : squash);
+    circle(ctx, 0, 0, r, "#ffffff", "#e3d5b8", 3);
+    // X_X 眼 + 张大的嘴
+    ctx.strokeStyle = "#4a3728"; ctx.lineWidth = Math.max(2.5, r * 0.13); ctx.lineCap = "round";
+    [-1, 1].forEach(function (s) {
+      var ex = s * r * 0.36, ey = -r * 0.12, q = r * 0.16;
+      ctx.beginPath();
+      ctx.moveTo(ex - q, ey - q); ctx.lineTo(ex + q, ey + q);
+      ctx.moveTo(ex + q, ey - q); ctx.lineTo(ex - q, ey + q); ctx.stroke();
+    });
+    ctx.fillStyle = "#4a3728";
+    ctx.beginPath(); ctx.ellipse(0, r * 0.4, r * 0.26, r * 0.2, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.restore();
+    if (p > 0.45) drawStars(ctx, cx, cy, r, p);
+    if (p < 0.35) {                                  // 撞击瞬间的冲击线
+      ctx.strokeStyle = "rgba(255,120,80," + (1 - p / 0.35) + ")"; ctx.lineWidth = 3;
+      for (var i = 0; i < 7; i++) {
+        var a = -Math.PI / 2 + (i - 3) * 0.28 + Math.atan2(dir.y || 0, dir.x || 1) + Math.PI / 2;
+        ctx.beginPath();
+        ctx.moveTo(cx + Math.cos(a) * r * 1.1, cy + Math.sin(a) * r * 1.1);
+        ctx.lineTo(cx + Math.cos(a) * r * 2.1, cy + Math.sin(a) * r * 2.1);
+        ctx.stroke();
+      }
+    }
+  }
+
+  function drawExplosion(ctx, cx, cy, r, p) {
+    // 撞小恶魔:火球炸开 + 碎片四射 + POOF! 字样
+    var g = Math.min(1, p / 0.3), fade = p < 0.55 ? 1 : Math.max(0, 1 - (p - 0.55) / 0.45);
+    var R = r * (0.6 + g * 3.2);
+    ctx.save(); ctx.globalAlpha = fade;
+    var grd = ctx.createRadialGradient(cx, cy, R * 0.15, cx, cy, R);
+    grd.addColorStop(0, "#fff6c9"); grd.addColorStop(0.4, "#ffb43f");
+    grd.addColorStop(0.75, "#ff6a2b"); grd.addColorStop(1, "rgba(120,40,20,0)");
+    ctx.fillStyle = grd;
+    ctx.beginPath(); ctx.arc(cx, cy, R, 0, Math.PI * 2); ctx.fill();
+    // 卡通爆炸尖角
+    ctx.fillStyle = "rgba(255,220,120," + (0.85 * fade) + ")";
+    ctx.beginPath();
+    for (var k = 0; k < 16; k++) {
+      var a = k * Math.PI / 8, rr2 = k % 2 ? R * 0.62 : R * 1.05;
+      ctx.lineTo(cx + Math.cos(a) * rr2, cy + Math.sin(a) * rr2);
+    }
+    ctx.closePath(); ctx.fill();
+    // 碎片
+    for (var i = 0; i < 10; i++) {
+      var ang = i * 0.628 + 0.3, d = R * (0.9 + (i % 3) * 0.25);
+      circle(ctx, cx + Math.cos(ang) * d, cy + Math.sin(ang) * d, r * 0.2 * (1 - p * 0.5),
+             i % 2 ? "#8a4fe0" : "#ffd97a");
+    }
+    ctx.restore();
+    if (p > 0.25) {
+      ctx.save(); ctx.globalAlpha = Math.max(0, 1 - (p - 0.25) / 0.75);
+      ctx.translate(cx, cy - r * 2.2 - p * r);
+      ctx.rotate(-0.15);
+      text(ctx, "POOF!", 0, 0, r * 1.5, "#ffffff", "center", true);
+      ctx.strokeStyle = "#c23b1e"; ctx.lineWidth = 2;
+      ctx.strokeText("POOF!", 0, 0);
+      ctx.restore();
+    }
+  }
+
+  function drawDevour(ctx, cx, cy, r, p, t) {
+    // 被大恶魔吞:血盆大口合上 → 咕咚 → 打嗝小星星
+    var open = p < 0.45 ? 1 - p / 0.45 : 0;          // 1=张到最大, 0=合上
+    var scale = 1 + (p < 0.45 ? 0.25 * (1 - open) : 0.25 - Math.min(0.25, (p - 0.45) * 0.6));
+    // 被吞的小天使:逐渐缩小消失
+    if (p < 0.42) {
+      ctx.save(); ctx.globalAlpha = 1 - p / 0.42;
+      drawAngel(ctx, cx, cy + p * r * 0.8, r * (1 - p * 0.7), t, false);
+      ctx.restore();
+    }
+    ctx.save(); ctx.translate(cx, cy); ctx.scale(scale, scale);
+    var R = r * 1.5;
+    circle(ctx, 0, 0, R, "#8a4fe0", "#4a2a86", 3);   // 大恶魔的头
+    // 犄角
+    ctx.fillStyle = "#4a2a86";
+    ctx.beginPath(); ctx.moveTo(-R * 0.55, -R * 0.62); ctx.lineTo(-R * 0.9, -R * 1.25); ctx.lineTo(-R * 0.15, -R * 0.88); ctx.closePath(); ctx.fill();
+    ctx.beginPath(); ctx.moveTo(R * 0.55, -R * 0.62); ctx.lineTo(R * 0.9, -R * 1.25); ctx.lineTo(R * 0.15, -R * 0.88); ctx.closePath(); ctx.fill();
+    // 得意的眯眼
+    ctx.strokeStyle = "#2e1552"; ctx.lineWidth = Math.max(3, R * 0.11); ctx.lineCap = "round";
+    [-1, 1].forEach(function (s) {
+      ctx.beginPath(); ctx.arc(s * R * 0.34, -R * 0.16, R * 0.2, 1.15 * Math.PI, 1.85 * Math.PI); ctx.stroke();
+    });
+    // 大嘴:张开时是黑洞 + 尖牙,合上后是满足的弧线
+    var mh = R * (0.15 + open * 0.85);
+    ctx.fillStyle = "#2b0d3f";
+    ctx.beginPath(); ctx.ellipse(0, R * 0.34, R * 0.62, mh, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = "#fff";
+    for (var i = -2; i <= 2; i++) {
+      var tx = i * R * 0.24;
+      ctx.beginPath();
+      ctx.moveTo(tx - R * 0.09, R * 0.34 - mh);
+      ctx.lineTo(tx, R * 0.34 - mh + R * 0.26);
+      ctx.lineTo(tx + R * 0.09, R * 0.34 - mh);
+      ctx.closePath(); ctx.fill();
+    }
+    ctx.restore();
+    if (p > 0.55) {                                   // 吞完打个饱嗝
+      ctx.save(); ctx.globalAlpha = Math.max(0, 1 - (p - 0.55) / 0.45);
+      text(ctx, "BURP", cx + r * 1.9, cy - r * 1.6 - (p - 0.55) * r * 3, r * 0.95, "#ffe08a", "center", true);
+      ctx.restore();
+      drawStars(ctx, cx, cy, r * 1.4, p);
+    }
+  }
+
+  function drawTangled(ctx, cx, cy, r, p, t) {
+    // 自己缠住:天使晕头转向打转 + 星星
+    ctx.save(); ctx.translate(cx, cy); ctx.rotate(p * Math.PI * 3);
+    drawAngel(ctx, 0, 0, r, t, false);
+    ctx.restore();
+    drawStars(ctx, cx, cy, r, p);
+  }
+
+  function drawDeath(ctx, C, st, cc, r, t) {
+    var p = Math.min(1, st.death.since / C.DYING_MS);
+    var at = cc(st.death.at), kind = st.death.kind;
+    if (kind === "wall") drawSquashedAngel(ctx, at.x, at.y, r, p, st.death.hitDir || { x: 1, y: 0 });
+    else if (kind === "demon") drawExplosion(ctx, at.x, at.y, r, p);
+    else if (kind === "devour") drawDevour(ctx, at.x, at.y, r, p, t);
+    else drawTangled(ctx, at.x, at.y, r, p, t);
+  }
+
   function text(ctx, str, x, y, size, color, align, bold) {
     ctx.fillStyle = color;
     ctx.font = (bold ? "bold " : "") + size + 'px "Trebuchet MS", "Verdana", sans-serif';
@@ -189,7 +329,8 @@ var Render = (function () {
       ctx.strokeStyle = "rgba(242,193,78,.85)"; ctx.lineWidth = 4;
       circle(ctx, hd.x, hd.y, r * 1.5 + Math.sin(t * 8) * 2, null, "rgba(242,193,78,.85)", 4);
     }
-    drawAngel(ctx, hd.x, hd.y, r, t, ghost);
+    if (st.mode === "dying") drawDeath(ctx, C, st, cc, r, t);
+    else drawAngel(ctx, hd.x, hd.y, r, t, ghost);
 
     // 技能按钮
     if (st.skill && st.mode === "play") {

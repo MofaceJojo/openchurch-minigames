@@ -154,7 +154,19 @@ var Core = (function () {
     if (bi < 0 || st.rival.body.length > RIVAL_MAX_LEN) st.rival.body.pop();
   }
 
-  function die(st, msg) { st.mode = "dead"; st.deathMsg = msg; }
+  /* 死亡:先进 dying 播 1.5 秒演出,再转 dead 出结算。
+     kind = wall(撞墙压扁) / demon(炸开) / devour(被吞) / self(自己缠住) */
+  var DYING_MS = 1500;
+  function die(st, msg, kind, at) {
+    st.mode = "dying";
+    st.deathMsg = msg;
+    st.death = { kind: kind, at: at || { x: st.snake[0].x, y: st.snake[0].y }, since: 0, hitDir: st.dir };
+  }
+  function tickDying(st, dtMs) {
+    if (st.mode !== "dying") return;
+    st.death.since += dtMs;
+    if (st.death.since >= DYING_MS) st.mode = "dead";
+  }
 
   function step(st) {
     if (st.mode !== "play") return;
@@ -167,23 +179,24 @@ var Core = (function () {
     var i;
 
     if (head.x < 0 || head.x >= COLS || head.y < 0 || head.y >= ROWS)
-      return die(st, "The little angel flew out of the field");
+      return die(st, "SPLAT! Straight into the fence.", "wall",
+                 { x: Math.min(COLS - 0.5, Math.max(-0.5, head.x)), y: Math.min(ROWS - 0.5, Math.max(-0.5, head.y)) });
     // 尾巴宽容:不吃人时尾巴这拍会挪走,追尾是安全的(娱乐性优先)
     var eating = cellInList(st.believers, head.x, head.y) >= 0;
     if (!effectActive(st, "ghost"))
       for (i = 0; i < st.snake.length - (eating ? 0 : 1); i++)
         if (st.snake[i].x === head.x && st.snake[i].y === head.y)
-          return die(st, "You bumped into your own line");
+          return die(st, "Oops — tangled up in your own flock!", "self", head);
     if (!effectActive(st, "ghost") && !effectActive(st, "shield"))
       for (i = 0; i < st.demons.length; i++)
         if (st.demons[i].x === head.x && st.demons[i].y === head.y)
-          return die(st, "A little demon caught you");
+          return die(st, "KABOOM! That demon went off like a firecracker.", "demon", head);
 
     if (st.rival) {
       var ri = cellInList(st.rival.body, head.x, head.y);
       if (ri === 0) {
         if (!effectActive(st, "ghost") && !effectActive(st, "shield"))
-          return die(st, "The great demon caught you");
+          return die(st, "GULP! The great demon swallowed you whole.", "devour", head);
       } else if (ri > 0 && st.rival.body.length > 3) {
         // 撞到尾巴:从撞点到尾端的俘虏整段抢回(恶魔本体 3 节保留)
         var keep = Math.max(3, ri);
@@ -231,6 +244,7 @@ var Core = (function () {
     COLS: COLS, ROWS: ROWS, MAX_LEVEL: MAX_LEVEL,
     SKILLS: SKILLS, quota: quota, demonCount: demonCount,
     hasRival: hasRival, rivalEvery: rivalEvery, hasSkills: hasSkills,
+    DYING_MS: DYING_MS, tickDying: tickDying,
     tickMs: tickMs, create: create, newLevel: newLevel, step: step,
     setDir: setDir, useSkill: useSkill, advance: advance, effectActive: effectActive
   };

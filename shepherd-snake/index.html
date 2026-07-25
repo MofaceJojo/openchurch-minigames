@@ -13,8 +13,8 @@
 </head>
 <body>
 <canvas id="cv"></canvas>
-<script src="core.js?v=6"></script>
-<script src="render.js?v=6"></script>
+<script src="core.js?v=7"></script>
+<script src="render.js?v=7"></script>
 <script>
 "use strict";
 const cv = document.getElementById("cv"), ctx = cv.getContext("2d");
@@ -35,13 +35,16 @@ function fit() {
 }
 fit(); addEventListener("resize", fit);
 
-let lastTick = 0;
+let lastTick = 0, lastFrame = 0;
 function loop(now) {
+  const dt = lastFrame ? now - lastFrame : 16;
+  lastFrame = now;
   if (st.mode === "play" && now - lastTick >= Core.tickMs(st.level)) {
     lastTick = now;
     Core.step(st);
     if (st.mode === "clear") localStorage.setItem("shepherd-level", Math.min(st.level + 1, Core.MAX_LEVEL));
   }
+  Core.tickDying(st, dt);
   Render.draw(ctx, Core, st, px, now / 1000);
   requestAnimationFrame(loop);
 }
