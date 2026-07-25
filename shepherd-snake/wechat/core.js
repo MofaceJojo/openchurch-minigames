@@ -10,8 +10,10 @@ var Core = (function () {
                        : 20 + (level - 40) * 3;              // lv41-50: 23→50,冲刺段
   }
   function demonCount(level) {
+    // 小恶魔永远站桩不动(是地形不是威胁),所以数量可以随关卡稳步增加:
+    // 第 2 关登场,之后每 5 关 +1,50 关时 10 只(占场地 5%,仍宽敞)
     if (level < 2) return 0;
-    return Math.min(3, 1 + Math.floor((level - 2) / 12));    // 小恶魔永远站桩、最多 3 只(地形)
+    return Math.min(10, 1 + Math.floor((level - 2) / 5));
   }
   function hasRival(level) { return level >= 30; }           // 30 关起:大恶魔蛇和你比赛抢信徒
   function rivalEvery(level) {                                // 每 N 拍走一步,越后期越敏捷

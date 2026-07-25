@@ -626,26 +626,12 @@ var Render = (function () {
       drawSkillIcon(ctx, C, st.skill, btn.x, btn.y - btn.r * 0.22, btn.r * 0.5, t);
       text(ctx, sk0.name.toUpperCase(), btn.x, btn.y + btn.r * 0.58, btn.r * 0.3, sk0.dark, "center", true);
 
+      // 刚捡到:按钮上方一个小标闪一下就走(详细说明已由暂停卡片承担)
       var fresh = st.skillTick != null ? st.tickCount - st.skillTick : 99;
-      if (fresh < 22 && st.mode === "play") { // 刚捡到:气泡说明技能作用 + 两种操作方式
-        var fade = fresh > 17 ? 1 - (fresh - 17) / 5 : 1;
-        var bob = Math.sin(t * 6) * 4;
-        var sk = C.SKILLS[st.skill];
+      if (fresh < 9 && st.mode === "play") {
+        var fade = fresh > 6 ? 1 - (fresh - 6) / 3 : 1;
         ctx.save(); ctx.globalAlpha = fade;
-        var bw = Math.min(w - px * 0.8, px * 9), bh = px * 3.1;
-        var bx0 = Math.max(px * 0.4, btn.x - bw + btn.r * 0.5);
-        var by0 = btn.y - btn.r - bh - 18 + bob;
-        ctx.fillStyle = "#fffdf2"; rr(ctx, bx0, by0, bw, bh, 12); ctx.fill();
-        ctx.strokeStyle = sk.dark; ctx.lineWidth = 2.5; ctx.stroke();
-        var mid = bx0 + bw / 2;
-        drawSkillIcon(ctx, C, st.skill, bx0 + px * 0.85, by0 + bh * 0.26, px * 0.42, t);
-        text(ctx, sk.name.toUpperCase(), mid + px * 0.5, by0 + bh * 0.24, px * 0.56, sk.dark, "center", true);
-        text(ctx, sk.desc, mid, by0 + bh * 0.52, px * 0.42, "#7a6a4a");
-        text(ctx, USE_HINT, mid, by0 + bh * 0.8, px * 0.46, "#3f7d5a", "center", true);
-        ctx.fillStyle = sk.color; ctx.strokeStyle = sk.dark;
-        ctx.beginPath();
-        ctx.moveTo(btn.x, by0 + bh + 13); ctx.lineTo(btn.x - 8, by0 + bh + 1); ctx.lineTo(btn.x + 8, by0 + bh + 1);
-        ctx.closePath(); ctx.fill(); ctx.stroke();
+        text(ctx, "READY!", btn.x, btn.y - btn.r - 14 - fresh * 1.5, px * 0.5, sk0.dark, "center", true);
         ctx.restore();
       }
     }
