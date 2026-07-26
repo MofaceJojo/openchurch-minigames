@@ -23,6 +23,12 @@ var Render = (function () {
     ctx.arcTo(x, y + h, x, y, r); ctx.arcTo(x, y, x + w, y, r);
     ctx.closePath();
   }
+  /* "#rrggbb" + 透明度 → rgba(...) */
+  function hexA(hex, a) {
+    var n = parseInt(hex.slice(1), 16);
+    return "rgba(" + ((n >> 16) & 255) + "," + ((n >> 8) & 255) + "," + (n & 255) + "," + a + ")";
+  }
+
   function circle(ctx, x, y, r, fill, stroke, lw) {
     ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2);
     if (fill) { ctx.fillStyle = fill; ctx.fill(); }
@@ -207,6 +213,132 @@ var Render = (function () {
     else if (id === "smite") iconSmite(ctx, cx, cy, r, col, t);
     else if (id === "shield") iconShield(ctx, cx, cy, r, col, t);
     else iconGhost(ctx, cx, cy, r, col, t);
+  }
+
+  /* 蓄力预备:天使脚下浮现技能范围圈,蓄满后闪金边 */
+  function drawChargeRange(ctx, C, st, cc, px, top, r, t) {
+    var ratio = C.chargeRatio(st), id = st.skill;
+    var col = C.SKILLS[id].color;
+    var head = cc(st.snake[0]);
+    var full = ratio >= 1;
+
+    if (id === "summon") {                       // 呼召:方形覆盖区(和判定完全一致)
+      var R = C.summonRadius(st);
+      var hx = st.snake[0].x, hy = st.snake[0].y;
+      ctx.save();
+      ctx.fillStyle = hexA(col, 0.13);
+      ctx.fillRect((hx - R) * px, top + (hy - R) * px, (R * 2 + 1) * px, (R * 2 + 1) * px);
+      ctx.strokeStyle = hexA(col, full ? 0.95 : 0.6);
+      ctx.lineWidth = full ? 4 : 2.5;
+      ctx.setLineDash([px * 0.35, px * 0.22]);
+      ctx.lineDashOffset = -t * 26;
+      ctx.strokeRect((hx - R) * px, top + (hy - R) * px, (R * 2 + 1) * px, (R * 2 + 1) * px);
+      ctx.setLineDash([]);
+      // 圈内信徒高亮:预示会被吸进来
+      for (var i = 0; i < st.believers.length; i++) {
+        var b = st.believers[i];
+        if (Math.max(Math.abs(b.x - hx), Math.abs(b.y - hy)) <= R) {
+          var bp = cc(b);
+          ctx.strokeStyle = hexA(col, 0.85);
+          ctx.lineWidth = 3;
+          circle(ctx, bp.x, bp.y, r * (1.15 + Math.sin(t * 9) * 0.08), null, ctx.strokeStyle, 3);
+          // 指向天使的牵引虚线
+          ctx.globalAlpha = 0.5;
+          ctx.setLineDash([4, 5]); ctx.lineDashOffset = t * 24;
+          ctx.beginPath(); ctx.moveTo(bp.x, bp.y); ctx.lineTo(head.x, head.y); ctx.stroke();
+          ctx.setLineDash([]); ctx.globalAlpha = 1;
+        }
+      }
+      ctx.restore();
+    } else if (id === "smite") {                 // 圣火:锁定最近的恶魔
+      var best = null, dist = 1e9;
+      for (var k = 0; k < st.demons.length; k++) {
+        var d = Math.abs(st.demons[k].x - st.snake[0].x) + Math.abs(st.demons[k].y - st.snake[0].y);
+        if (d < dist) { dist = d; best = st.demons[k]; }
+      }
+      if (best) {
+        var tp = cc(best);
+        ctx.save();
+        ctx.strokeStyle = hexA(col, 0.9); ctx.lineWidth = 3;
+        var lock = r * (1.6 - 0.45 * Math.min(1, ratio * 1.4)) + Math.sin(t * 10) * 2;
+        circle(ctx, tp.x, tp.y, lock, null, ctx.strokeStyle, 3);
+        ctx.setLineDash([5, 6]); ctx.lineDashOffset = -t * 30; ctx.globalAlpha = 0.6;
+        ctx.beginPath(); ctx.moveTo(head.x, head.y); ctx.lineTo(tp.x, tp.y); ctx.stroke();
+        ctx.restore();
+      }
+    } else {                                     // 护佑 / 灵体:自身光环
+      ctx.save();
+      ctx.strokeStyle = hexA(col, full ? 0.95 : 0.65);
+      ctx.lineWidth = full ? 5 : 3;
+      circle(ctx, head.x, head.y, r * (1.5 + ratio * 0.7) + Math.sin(t * 8) * 2, null, ctx.strokeStyle, ctx.lineWidth);
+      ctx.restore();
+    }
+
+    // 蓄力进度条(天使正上方)
+    ctx.save();
+    var bw = px * 2.6, bh = px * 0.26, bx = head.x - bw / 2, by = head.y - r * 2.5;
+    ctx.fillStyle = "rgba(255,255,255,.85)"; rr(ctx, bx, by, bw, bh, bh / 2); ctx.fill();
+    ctx.fillStyle = full ? "#ffd24a" : col;
+    rr(ctx, bx, by, Math.max(bh, bw * ratio), bh, bh / 2); ctx.fill();
+    ctx.strokeStyle = hexA(col, 0.8); ctx.lineWidth = 1.5;
+    rr(ctx, bx, by, bw, bh, bh / 2); ctx.stroke();
+    if (full) text(ctx, "MAX", head.x, by - px * 0.34, px * 0.42, "#c98b2d", "center", true);
+    ctx.restore();
+  }
+
+  /* 技能释放特效 */
+  function drawSkillFx(ctx, C, st, cc, px, top, r, t) {
+    var fx = st.fx, p = Math.min(1, fx.ms / C.FX_MS), fade = 1 - p, i;
+    var col = C.SKILLS[fx.type] ? C.SKILLS[fx.type].color : "#ffd24a";
+    var at = cc(fx.at);
+    ctx.save();
+    if (fx.type === "summon") {
+      // 三层收拢的光环 + 被吸入者的流星尾迹
+      for (i = 0; i < 3; i++) {
+        var q = Math.max(0, Math.min(1, p * 1.4 - i * 0.18));
+        var rad = (fx.r + 0.5) * px * (1 - q);
+        ctx.strokeStyle = hexA(col, 0.75 * (1 - q));
+        ctx.lineWidth = 5 - i;
+        circle(ctx, at.x, at.y, Math.max(2, rad), null, ctx.strokeStyle, ctx.lineWidth);
+      }
+      for (i = 0; i < fx.joined.length; i++) {
+        var jp = cc(fx.joined[i]);
+        var e = 1 - Math.pow(1 - Math.min(1, p * 1.25), 2);   // ease-out
+        var mx = jp.x + (at.x - jp.x) * e, my = jp.y + (at.y - jp.y) * e;
+        ctx.globalAlpha = fade;
+        ctx.strokeStyle = hexA(col, 0.5); ctx.lineWidth = 3;
+        ctx.beginPath(); ctx.moveTo(jp.x, jp.y); ctx.lineTo(mx, my); ctx.stroke();
+        circle(ctx, mx, my, r * 0.55 * (1 - p * 0.5), "#ffe8b8", col, 2);
+        ctx.globalAlpha = 1;
+      }
+      if (fx.joined.length) {
+        ctx.globalAlpha = fade;
+        text(ctx, "+" + fx.joined.length, at.x, at.y - r * 2 - p * r * 1.6, px * 0.8, col, "center", true);
+        ctx.globalAlpha = 1;
+      }
+    } else if (fx.type === "smite") {
+      var fp = cc(fx.from);
+      if (p < 0.4) {                                  // 光束劈下
+        ctx.strokeStyle = hexA(col, 0.9 * (1 - p / 0.4));
+        ctx.lineWidth = 8 * (1 - p / 0.4) + 2;
+        ctx.lineCap = "round";
+        ctx.beginPath(); ctx.moveTo(fp.x, fp.y); ctx.lineTo(at.x, at.y); ctx.stroke();
+      }
+      var R2 = r * (0.6 + p * 3);                     // 火焰炸开
+      ctx.globalAlpha = fade;
+      ctx.fillStyle = hexA(col, 0.5);
+      ctx.beginPath(); ctx.arc(at.x, at.y, R2, 0, Math.PI * 2); ctx.fill();
+      for (i = 0; i < 8; i++) {
+        var a = i * Math.PI / 4 + 0.2;
+        circle(ctx, at.x + Math.cos(a) * R2, at.y + Math.sin(a) * R2, r * 0.22 * fade, col);
+      }
+      ctx.globalAlpha = 1;
+    } else {                                          // 护佑 / 灵体:光环炸开
+      ctx.strokeStyle = hexA(col, 0.8 * fade);
+      ctx.lineWidth = 6 * fade + 1;
+      circle(ctx, at.x, at.y, r * (1.2 + p * 2.6), null, ctx.strokeStyle, ctx.lineWidth);
+    }
+    ctx.restore();
   }
 
   /* 救到一人:光环扩散 + 小星花四射 + "+1" 上飘。短促(0.62s)不打断节奏 */
@@ -578,6 +710,8 @@ var Render = (function () {
       var pk = cc(st.pickup);
       drawPickup(ctx, C, st.pickupSkill || "summon", pk.x, pk.y, r * 0.9, t);
     }
+    // 蓄力范围圈画在角色底下,不遮挡
+    if (st.charge && st.skill && st.mode === "play") drawChargeRange(ctx, C, st, cc, px, top, r, t);
     if (!cheering) for (i = 0; i < st.believers.length; i++) { var b = cc(st.believers[i]); drawBeliever(ctx, b.x, b.y, r, t); }
     if (!cheering) for (i = 0; i < st.demons.length; i++) {
       var d = cc(st.demons[i]);
@@ -611,6 +745,7 @@ var Render = (function () {
       var fxp = cc(st.rescueFx);
       drawRescueFx(ctx, C, st.rescueFx, fxp.x, fxp.y, r, t);
     }
+    if (st.fx && !cheering) drawSkillFx(ctx, C, st, cc, px, top, r, t);
 
     if (st.mode === "cheering") drawCheer(ctx, C, st, w, h, top, px, r, t);
 

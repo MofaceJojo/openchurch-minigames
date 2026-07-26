@@ -98,20 +98,45 @@ var Core = (function () {
     return st.effect && st.effect.type === type && st.effect.ticksLeft > 0;
   }
 
+  var SUMMON_R = 3;              // 呼召半径(切比雪夫距离,即 7×7 方形)
+  var CHARGE_MAX_MS = 900;       // 蓄力满所需时长
+  var CHARGE_BONUS_R = 2;        // 蓄满后额外半径
+
+  /* 按住蓄力:范围随时长扩大,松开才释放 */
+  function beginCharge(st) {
+    if (st.mode !== "play" || !st.skill || st.charge) return false;
+    st.charge = { ms: 0 };
+    return true;
+  }
+  function tickCharge(st, dtMs) {
+    if (st.charge) st.charge.ms = Math.min(CHARGE_MAX_MS, st.charge.ms + dtMs);
+  }
+  function chargeRatio(st) {
+    return st.charge ? st.charge.ms / CHARGE_MAX_MS : 0;
+  }
+  /* 当前(或蓄力中)呼召半径 */
+  function summonRadius(st) {
+    return SUMMON_R + Math.round(chargeRatio(st) * CHARGE_BONUS_R);
+  }
+  function cancelCharge(st) { st.charge = null; }
+
   function useSkill(st) {
-    if (st.mode !== "play" || !st.skill) return null;
+    if (st.mode !== "play" || !st.skill) { st.charge = null; return null; }
     var id = st.skill, head = st.snake[0], i;
+    var radius = summonRadius(st);
+    st.charge = null;
     st.skill = null;
     if (id === "summon") {
       var joined = [];
       for (i = st.believers.length - 1; i >= 0; i--) {
         var b = st.believers[i];
-        if (Math.max(Math.abs(b.x - head.x), Math.abs(b.y - head.y)) <= 3) {
+        if (Math.max(Math.abs(b.x - head.x), Math.abs(b.y - head.y)) <= radius) {
           st.believers.splice(i, 1);
           st.snake.push({ x: st.snake[st.snake.length - 1].x, y: st.snake[st.snake.length - 1].y });
           st.rescued++; joined.push(b);
         }
       }
+      st.fx = { type: "summon", at: { x: head.x, y: head.y }, r: radius, joined: joined, ms: 0 };
       fillBelievers(st);
       if (st.rescued >= quota(st.level)) win(st);
       return { id: id, joined: joined };
@@ -122,11 +147,21 @@ var Core = (function () {
         var d = Math.abs(st.demons[i].x - head.x) + Math.abs(st.demons[i].y - head.y);
         if (d < dist) { dist = d; best = i; }
       }
-      if (best >= 0) return { id: id, demon: st.demons.splice(best, 1)[0] };
+      if (best >= 0) {
+        var gone = st.demons.splice(best, 1)[0];
+        st.fx = { type: "smite", at: { x: gone.x, y: gone.y }, from: { x: head.x, y: head.y }, ms: 0 };
+        return { id: id, demon: gone };
+      }
       return { id: id };
     }
     st.effect = { type: id, ticksLeft: EFFECT_TICKS }; // shield / ghost
+    st.fx = { type: id, at: { x: head.x, y: head.y }, ms: 0 };
     return { id: id };
+  }
+
+  var FX_MS = 620;
+  function tickFx(st, dtMs) {
+    if (st.fx && (st.fx.ms += dtMs) >= FX_MS) st.fx = null;
   }
 
   function cellInList(list, x, y) {
@@ -278,7 +313,10 @@ var Core = (function () {
     hasRival: hasRival, rivalEvery: rivalEvery, hasSkills: hasSkills,
     DYING_MS: DYING_MS, CHEER_MS: CHEER_MS, RESCUE_FX_MS: RESCUE_FX_MS, tickDying: tickDying,
     tickMs: tickMs, create: create, newLevel: newLevel, step: step,
-    setDir: setDir, useSkill: useSkill, advance: advance, effectActive: effectActive
+    setDir: setDir, useSkill: useSkill, advance: advance, effectActive: effectActive,
+    beginCharge: beginCharge, tickCharge: tickCharge, cancelCharge: cancelCharge,
+    chargeRatio: chargeRatio, summonRadius: summonRadius, SUMMON_R: SUMMON_R,
+    CHARGE_MAX_MS: CHARGE_MAX_MS, tickFx: tickFx, FX_MS: FX_MS
   };
 })();
 
