@@ -13,8 +13,8 @@
 </head>
 <body>
 <canvas id="cv"></canvas>
-<script src="core.js?v=16"></script>
-<script src="render.js?v=16"></script>
+<script src="core.js?v=17"></script>
+<script src="render.js?v=17"></script>
 <script>
 "use strict";
 const cv = document.getElementById("cv"), ctx = cv.getContext("2d");
@@ -27,7 +27,7 @@ const st = Core.create(+(localStorage.getItem("shepherd-level") || 1), seen);
 
 // 触屏设备只提"点按钮",带键盘的设备提空格
 Render.setUseHint(
-  matchMedia("(pointer: coarse)").matches ? "Hold the button to aim, release to cast" : "Hold SPACE to aim, release to cast",
+  matchMedia("(pointer: coarse)").matches ? "Tap the button to use it" : "Press SPACE or click the button",
   matchMedia("(pointer: coarse)").matches ? "Swipe or tap to continue" : "Press any arrow key to continue");
 
 function fit() {
@@ -53,7 +53,6 @@ function loop(now) {
     if (st.mode === "skillIntro") localStorage.setItem("shepherd-seen-skills", JSON.stringify(st.seenSkills));
   }
   Core.tickDying(st, dt);
-  Core.tickCharge(st, dt);
   Core.tickFx(st, dt);
   Render.draw(ctx, Core, st, px, now / 1000);
   requestAnimationFrame(loop);
@@ -71,18 +70,11 @@ function confirmOrSkill(x, y) {
 }
 
 const DIRS = { ArrowUp: [0,-1], ArrowDown: [0,1], ArrowLeft: [-1,0], ArrowRight: [1,0], w: [0,-1], s: [0,1], a: [-1,0], d: [1,0] };
-// 空格:按住蓄力预览范围,松开释放
-addEventListener("keyup", e => {
-  if (e.key === " " || e.key === "Spacebar" || e.code === "Space") {
-    e.preventDefault();
-    if (st.charge) Core.useSkill(st);
-  }
-});
 addEventListener("keydown", e => {
   if (e.key === " " || e.key === "Spacebar" || e.code === "Space") {
     e.preventDefault();
-    if (e.repeat) return;                       // 长按的重复事件不重新开始蓄力
-    if (st.mode === "play") Core.beginCharge(st); else Core.advance(st);
+    if (e.repeat) return;
+    st.mode === "play" ? Core.useSkill(st) : Core.advance(st);
     return;
   }
   if (e.key === "Enter") { if (st.mode !== "play") Core.advance(st); return; }
@@ -97,20 +89,10 @@ addEventListener("keydown", e => {
   }
 });
 
-function onSkillBtn(x, y) {
-  const b = Render.skillBtn(Core, px);
-  return (x - b.x) ** 2 + (y - b.y) ** 2 <= (b.r * 1.3) ** 2;
-}
-
-cv.addEventListener("pointerdown", e => {
-  cv._p = { x: e.offsetX, y: e.offsetY };
-  // 按住技能按钮 = 蓄力预览范围
-  if (st.mode === "play" && st.skill && onSkillBtn(e.offsetX, e.offsetY)) Core.beginCharge(st);
-});
-cv.addEventListener("pointercancel", () => { cv._p = null; Core.cancelCharge(st); });
+cv.addEventListener("pointerdown", e => { cv._p = { x: e.offsetX, y: e.offsetY }; });
+cv.addEventListener("pointercancel", () => { cv._p = null; });
 cv.addEventListener("pointerup", e => {
   const p = cv._p; if (!p) return; cv._p = null;
-  if (st.charge) { Core.useSkill(st); return; }   // 松手释放
   const dx = e.offsetX - p.x, dy = e.offsetY - p.y;
   if (Math.abs(dx) < 16 && Math.abs(dy) < 16) return confirmOrSkill(e.offsetX, e.offsetY);
   // 暂停画面滑动 = 继续并朝该方向走

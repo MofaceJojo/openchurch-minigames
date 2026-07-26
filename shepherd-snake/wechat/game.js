@@ -20,7 +20,7 @@ var offX = (info.windowWidth - sz.w) / 2, offY = (info.windowHeight - sz.h) / 2;
 
 var st = Core.create(+(wx.getStorageSync("shepherd-level") || 1),
                      wx.getStorageSync("shepherd-seen-skills") || {});
-Render.setUseHint("Hold the button to aim, release to cast", "Swipe or tap to continue");
+Render.setUseHint("Tap the button to use it", "Swipe or tap to continue");
 
 var lastTick = 0, lastFrame = 0;
 function loop(now) {
@@ -33,7 +33,6 @@ function loop(now) {
     if (st.mode === "skillIntro") wx.setStorageSync("shepherd-seen-skills", st.seenSkills);
   }
   Core.tickDying(st, dt);
-  Core.tickCharge(st, dt);
   Core.tickFx(st, dt);
   Render.draw(ctx, Core, st, px, now / 1000);
   requestAnimationFrame(loop);
@@ -41,26 +40,22 @@ function loop(now) {
 requestAnimationFrame(loop);
 
 var touchStart = null;
-function onSkillBtn(x, y) {
-  var b = Render.skillBtn(Core, px);
-  return (x - b.x) * (x - b.x) + (y - b.y) * (y - b.y) <= b.r * b.r * 1.7;
-}
 wx.onTouchStart(function (e) {
   var t = e.touches[0];
   touchStart = { x: t.clientX - offX, y: t.clientY - offY };
-  // 按住技能按钮 = 蓄力预览范围
-  if (st.mode === "play" && st.skill && onSkillBtn(touchStart.x, touchStart.y)) Core.beginCharge(st);
 });
-wx.onTouchCancel(function () { touchStart = null; Core.cancelCharge(st); });
+wx.onTouchCancel(function () { touchStart = null; });
 wx.onTouchEnd(function (e) {
   if (!touchStart) return;
   var t = e.changedTouches[0];
   var x = t.clientX - offX, y = t.clientY - offY;
   var dx = x - touchStart.x, dy = y - touchStart.y;
   touchStart = null;
-  if (st.charge) { Core.useSkill(st); return; }   // 松手释放
   if (Math.abs(dx) < 16 && Math.abs(dy) < 16) {
     if (st.mode !== "play") { Core.advance(st); lastTick = Date.now(); return; }
+    var b = Render.skillBtn(Core, px);
+    var d2 = (x - b.x) * (x - b.x) + (y - b.y) * (y - b.y);
+    if (st.skill && d2 <= b.r * b.r * 1.7) Core.useSkill(st);
     return;
   }
   // 暂停画面滑动 = 继续并朝该方向走

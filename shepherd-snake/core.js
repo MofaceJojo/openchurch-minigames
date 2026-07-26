@@ -20,7 +20,11 @@ var Core = (function () {
     return level >= 46 ? 2 : level >= 38 ? 3 : 4;
   }
   var RIVAL_MAX_LEN = 14;
-  function hasSkills(level) { return level >= 5; }           // 技能是玩具,早点给
+  function hasSkills(level) { return level >= 5; }
+  // 后期地图更挤、配额更高,道具数量跟着涨:lv5-16:1, 17-28:2, 29-40:3, 41+:4
+  function pickupCount(level) {
+    return level < 5 ? 0 : Math.min(4, 1 + Math.floor((level - 5) / 12));
+  }           // 技能是玩具,早点给
   function tickMs(level) {
     // 每 5 关提一档速度(玩家能明显感到"变快了"的爽感),
     // 40 关(136ms)到顶,之后不再用速度上难度——难度交给大恶魔蛇
@@ -41,7 +45,7 @@ var Core = (function () {
     for (i = 0; i < st.snake.length; i++) if (st.snake[i].x === x && st.snake[i].y === y) return true;
     for (i = 0; i < st.demons.length; i++) if (st.demons[i].x === x && st.demons[i].y === y) return true;
     for (i = 0; i < st.believers.length; i++) if (st.believers[i].x === x && st.believers[i].y === y) return true;
-    if (st.pickup && st.pickup.x === x && st.pickup.y === y) return true;
+    for (i = 0; i < st.pickups.length; i++) if (st.pickups[i].x === x && st.pickups[i].y === y) return true;
     return false;
   }
 
@@ -65,18 +69,20 @@ var Core = (function () {
     st.rescued = 0;
     st.snake = [{ x: 5, y: 8 }, { x: 5, y: 9 }, { x: 5, y: 10 }];
     st.dir = { x: 0, y: -1 }; st.nextDir = st.dir;
-    st.demons = []; st.believers = []; st.pickup = null;
-    st.skill = null; st.effect = null; st.tickCount = 0; st.rescueFx = null;
+    st.demons = []; st.believers = []; st.pickups = [];
+    st.skill = null; st.effect = null; st.tickCount = 0; st.rescueFx = null; st.fx = null;
     st.rival = hasRival(level)
       ? { body: [{ x: COLS - 2, y: 1 }, { x: COLS - 1, y: 1 }, { x: COLS - 1, y: 0 }] }
       : null;
     var i, n = demonCount(level);
     for (i = 0; i < n; i++) st.demons.push(freeCell(st, 5));
-    // 技能在开局就定好类型,拾取物据此显示图标 —— 玩家能提前判断值不值得绕路
-    if (hasSkills(level)) {
-      st.pickup = freeCell(st, 4);
-      st.pickupSkill = SKILL_IDS[(Math.random() * SKILL_IDS.length) | 0];
-    } else st.pickupSkill = null;
+    // 每个拾取物开局就定好技能类型,据此显示图标 —— 玩家能提前判断值不值得绕路
+    n = pickupCount(level);
+    for (i = 0; i < n; i++) {
+      var p = freeCell(st, 4);
+      p.skill = SKILL_IDS[(Math.random() * SKILL_IDS.length) | 0];
+      st.pickups.push(p);
+    }
     fillBelievers(st);
     st.mode = "intro";
   }
@@ -99,32 +105,12 @@ var Core = (function () {
   }
 
   var SUMMON_R = 3;              // 呼召半径(切比雪夫距离,即 7×7 方形)
-  var CHARGE_MAX_MS = 900;       // 蓄力满所需时长
-  var CHARGE_BONUS_R = 2;        // 蓄满后额外半径
 
-  /* 按住蓄力:范围随时长扩大,松开才释放 */
-  function beginCharge(st) {
-    if (st.mode !== "play" || !st.skill || st.charge) return false;
-    st.charge = { ms: 0 };
-    return true;
-  }
-  function tickCharge(st, dtMs) {
-    if (st.charge) st.charge.ms = Math.min(CHARGE_MAX_MS, st.charge.ms + dtMs);
-  }
-  function chargeRatio(st) {
-    return st.charge ? st.charge.ms / CHARGE_MAX_MS : 0;
-  }
-  /* 当前(或蓄力中)呼召半径 */
-  function summonRadius(st) {
-    return SUMMON_R + Math.round(chargeRatio(st) * CHARGE_BONUS_R);
-  }
-  function cancelCharge(st) { st.charge = null; }
-
+  /* 按下即释放 —— 这是快节奏游戏,不做蓄力两步操作 */
   function useSkill(st) {
-    if (st.mode !== "play" || !st.skill) { st.charge = null; return null; }
+    if (st.mode !== "play" || !st.skill) return null;
     var id = st.skill, head = st.snake[0], i;
-    var radius = summonRadius(st);
-    st.charge = null;
+    var radius = SUMMON_R;
     st.skill = null;
     if (id === "summon") {
       var joined = [];
@@ -270,10 +256,11 @@ var Core = (function () {
 
     st.snake.unshift(head);
 
-    if (st.pickup && st.pickup.x === head.x && st.pickup.y === head.y) {
-      st.skill = st.pickupSkill;
+    var pi = cellInList(st.pickups, head.x, head.y);
+    if (pi >= 0) {
+      st.skill = st.pickups[pi].skill;
       st.skillTick = st.tickCount;   // 渲染层据此播"点这里用"提示
-      st.pickup = null;
+      st.pickups.splice(pi, 1);
       // 这个技能第一次拿到 → 暂停,让玩家看完说明再继续
       if (!st.seenSkills[st.skill]) {
         st.seenSkills[st.skill] = true;
@@ -314,9 +301,7 @@ var Core = (function () {
     DYING_MS: DYING_MS, CHEER_MS: CHEER_MS, RESCUE_FX_MS: RESCUE_FX_MS, tickDying: tickDying,
     tickMs: tickMs, create: create, newLevel: newLevel, step: step,
     setDir: setDir, useSkill: useSkill, advance: advance, effectActive: effectActive,
-    beginCharge: beginCharge, tickCharge: tickCharge, cancelCharge: cancelCharge,
-    chargeRatio: chargeRatio, summonRadius: summonRadius, SUMMON_R: SUMMON_R,
-    CHARGE_MAX_MS: CHARGE_MAX_MS, tickFx: tickFx, FX_MS: FX_MS
+    SUMMON_R: SUMMON_R, pickupCount: pickupCount, tickFx: tickFx, FX_MS: FX_MS
   };
 })();
 
