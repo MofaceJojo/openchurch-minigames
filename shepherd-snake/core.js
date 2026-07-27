@@ -4,20 +4,37 @@
 var Core = (function () {
   var COLS = 12, ROWS = 16, MAX_LEVEL = 50;
 
+  /* 难度档:主要受众是孩子和女性玩家,Gentle 要真的轻松。
+     speed 越大走得越慢,demons/quota 是数量倍率,rival 越大大恶魔越迟钝 */
+  var DIFFS = {
+    gentle: { id: "gentle", name: "Gentle", blurb: "Slow and forgiving",
+              speed: 1.55, demons: 0.4, quota: 0.7, rival: 1.6 },
+    normal: { id: "normal", name: "Normal", blurb: "A steady stroll",
+              speed: 1.0,  demons: 1,   quota: 1,   rival: 1 },
+    brave:  { id: "brave",  name: "Brave",  blurb: "Quick and crowded",
+              speed: 0.82, demons: 1.3, quota: 1,   rival: 0.8 }
+  };
+  var DIFF_IDS = ["gentle", "normal", "brave"];
+  function diff(d) { return DIFFS[d] || DIFFS.normal; }
+
   // 设计准则:1-40 关零压力,41-50 关才略微上强度;娱乐性 >> 难度
-  function quota(level) {
+  function baseQuota(level) {
     return level <= 40 ? 10 + Math.floor(level / 4)          // lv1-40: 10→20,缓到几乎无感
                        : 20 + (level - 40) * 3;              // lv41-50: 23→50,冲刺段
   }
-  function demonCount(level) {
+  function quota(level, d) {
+    return Math.max(6, Math.round(baseQuota(level) * diff(d).quota));
+  }
+  function demonCount(level, d) {
     // 小恶魔永远站桩不动(是地形不是威胁),所以数量可以随关卡稳步增加:
     // 第 2 关登场,之后每 5 关 +1,50 关时 10 只(占场地 5%,仍宽敞)
     if (level < 2) return 0;
-    return Math.min(10, 1 + Math.floor((level - 2) / 5));
+    return Math.round(Math.min(10, 1 + Math.floor((level - 2) / 5)) * diff(d).demons);
   }
   function hasRival(level) { return level >= 30; }           // 30 关起:大恶魔蛇和你比赛抢信徒
-  function rivalEvery(level) {                                // 每 N 拍走一步,越后期越敏捷
-    return level >= 46 ? 2 : level >= 38 ? 3 : 4;
+  function rivalEvery(level, d) {                             // 每 N 拍走一步,越后期越敏捷
+    var base = level >= 46 ? 2 : level >= 38 ? 3 : 4;
+    return Math.max(2, Math.round(base * diff(d).rival));
   }
   var RIVAL_MAX_LEN = 14;
   function hasSkills(level) { return level >= 5; }
@@ -25,10 +42,10 @@ var Core = (function () {
   function pickupCount(level) {
     return level < 5 ? 0 : Math.min(4, 1 + Math.floor((level - 5) / 12));
   }           // 技能是玩具,早点给
-  function tickMs(level) {
+  function tickMs(level, d) {
     // 每 5 关提一档速度(玩家能明显感到"变快了"的爽感),
-    // 40 关(136ms)到顶,之后不再用速度上难度——难度交给大恶魔蛇
-    return 200 - Math.min(8, Math.floor(level / 5)) * 8;
+    // 40 关到顶,之后不再用速度上难度——难度交给大恶魔蛇
+    return Math.round((200 - Math.min(8, Math.floor(level / 5)) * 8) * diff(d).speed);
   }
 
   var SKILLS = {
@@ -60,7 +77,7 @@ var Core = (function () {
   }
 
   function fillBelievers(st) {
-    var want = Math.min(4, quota(st.level) - st.rescued - st.believers.length);
+    var want = Math.min(4, quota(st.level, st.diff) - st.rescued - st.believers.length);
     while (want-- > 0) st.believers.push(freeCell(st, 2));
   }
 
@@ -74,7 +91,7 @@ var Core = (function () {
     st.rival = hasRival(level)
       ? { body: [{ x: COLS - 2, y: 1 }, { x: COLS - 1, y: 1 }, { x: COLS - 1, y: 0 }] }
       : null;
-    var i, n = demonCount(level);
+    var i, n = demonCount(level, st.diff);
     for (i = 0; i < n; i++) st.demons.push(freeCell(st, 5));
     // 每个拾取物开局就定好技能类型,据此显示图标 —— 玩家能提前判断值不值得绕路
     n = pickupCount(level);
@@ -87,12 +104,21 @@ var Core = (function () {
     st.mode = "intro";
   }
 
-  function create(savedLevel, seenSkills) {
+  function create(savedLevel, seenSkills, difficulty) {
     // seenSkills 跨关卡保留:每种技能只在第一次拿到时暂停讲解一次
-    var st = { mode: "menu", best: savedLevel || 1, deathMsg: "", seenSkills: seenSkills || {} };
+    var st = { mode: "menu", best: savedLevel || 1, deathMsg: "",
+               seenSkills: seenSkills || {}, diff: DIFFS[difficulty] ? difficulty : "normal" };
     newLevel(st, st.best);
     st.mode = "menu";
     return st;
+  }
+
+  function setDifficulty(st, d) {
+    if (!DIFFS[d] || st.diff === d) return false;
+    st.diff = d;
+    newLevel(st, st.level);        // 重排本关,立刻按新难度生效
+    st.mode = "menu";
+    return true;
   }
 
   function setDir(st, x, y) {
@@ -124,7 +150,7 @@ var Core = (function () {
       }
       st.fx = { type: "summon", at: { x: head.x, y: head.y }, r: radius, joined: joined, ms: 0 };
       fillBelievers(st);
-      if (st.rescued >= quota(st.level)) win(st);
+      if (st.rescued >= quota(st.level, st.diff)) win(st);
       return { id: id, joined: joined };
     }
     if (id === "smite") {
@@ -157,7 +183,7 @@ var Core = (function () {
 
   /* 大恶魔蛇:朝最近的信徒贪心走一步,抢到就挂在尾巴上 */
   function rivalTick(st) {
-    if (!st.rival || st.tickCount % rivalEvery(st.level) !== 0) return;
+    if (!st.rival || st.tickCount % rivalEvery(st.level, st.diff) !== 0) return;
     var head = st.rival.body[0], target = null, best = 1e9, i;
     for (i = 0; i < st.believers.length; i++) {
       var b = st.believers[i], d = Math.abs(b.x - head.x) + Math.abs(b.y - head.y);
@@ -250,7 +276,7 @@ var Core = (function () {
           st.snake.push({ x: st.snake[st.snake.length - 1].x, y: st.snake[st.snake.length - 1].y });
           st.rescued++;
         }
-        if (st.rescued >= quota(st.level)) { st.snake.unshift(head); win(st); return; }
+        if (st.rescued >= quota(st.level, st.diff)) { st.snake.unshift(head); win(st); return; }
       }
     }
 
@@ -278,7 +304,7 @@ var Core = (function () {
     if (!ate) st.snake.pop();
     else {
       fillBelievers(st);
-      if (st.rescued >= quota(st.level)) win(st);
+      if (st.rescued >= quota(st.level, st.diff)) win(st);
     }
   }
 
@@ -301,7 +327,8 @@ var Core = (function () {
     DYING_MS: DYING_MS, CHEER_MS: CHEER_MS, RESCUE_FX_MS: RESCUE_FX_MS, tickDying: tickDying,
     tickMs: tickMs, create: create, newLevel: newLevel, step: step,
     setDir: setDir, useSkill: useSkill, advance: advance, effectActive: effectActive,
-    SUMMON_R: SUMMON_R, pickupCount: pickupCount, tickFx: tickFx, FX_MS: FX_MS
+    SUMMON_R: SUMMON_R, pickupCount: pickupCount, tickFx: tickFx, FX_MS: FX_MS,
+    DIFFS: DIFFS, DIFF_IDS: DIFF_IDS, setDifficulty: setDifficulty
   };
 })();
 

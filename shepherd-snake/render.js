@@ -564,9 +564,10 @@ var Render = (function () {
     ctx.fillText(str, x, y);
   }
 
-  function overlay(ctx, w, h, title, lines, hint) {
+  function overlay(ctx, w, h, title, lines, hint, shiftUp) {
     ctx.fillStyle = "rgba(43,34,20,.55)"; ctx.fillRect(0, 0, w, h);
-    var pw = Math.min(w * 0.86, 340), ph = 190 + lines.length * 30, px0 = (w - pw) / 2, py0 = (h - ph) / 2;
+    var pw = Math.min(w * 0.86, 340), ph = 190 + lines.length * 30, px0 = (w - pw) / 2;
+    var py0 = Math.max(px0 * 0.4, (h - ph) / 2 - (shiftUp || 0));
     ctx.fillStyle = "#fffdf6"; rr(ctx, px0, py0, pw, ph, 20); ctx.fill();
     ctx.strokeStyle = "#e8d9b0"; ctx.lineWidth = 3; ctx.stroke();
     text(ctx, title, w / 2, py0 + 52, 30, "#8a6210", "center", true);
@@ -591,6 +592,37 @@ var Render = (function () {
     var totalW = cols * cw + (cols - 1) * gapx;
     return { cols: cols, cw: cw, chh: chh, gapx: gapx, gapy: gapy,
              x0: (w - totalW) / 2, y0: h - chh * 2 - gapy - px * 0.9 };
+  }
+
+  /* 难度选择:菜单页三个横向按钮,放在关卡格上方 */
+  function diffGeom(C, w, h, px) {
+    var g = pickerGeom(w, h, px);
+    var bw = Math.min(px * 3.4, (w - px * 1.2) / 3 - 8), bh = px * 1.5, gap = 8;
+    var totalW = 3 * bw + 2 * gap;
+    return { bw: bw, bh: bh, gap: gap, x0: (w - totalW) / 2, y0: g.y0 - bh - px * 1.5 };
+  }
+  function diffCell(dg, i) { return { x: dg.x0 + i * (dg.bw + dg.gap), y: dg.y0 }; }
+  function diffPickerHit(C, w, h, px, x, y) {
+    var dg = diffGeom(C, w, h, px);
+    for (var i = 0; i < C.DIFF_IDS.length; i++) {
+      var c = diffCell(dg, i);
+      if (x >= c.x && x <= c.x + dg.bw && y >= c.y && y <= c.y + dg.bh) return C.DIFF_IDS[i];
+    }
+    return null;
+  }
+  function drawDiffPicker(ctx, C, st, w, h, px) {
+    var dg = diffGeom(C, w, h, px);
+    text(ctx, "Difficulty", w / 2, dg.y0 - 14, 13, "#e8dcc0", "center", true);
+    for (var i = 0; i < C.DIFF_IDS.length; i++) {
+      var id = C.DIFF_IDS[i], d = C.DIFFS[id], c = diffCell(dg, i), cur = st.diff === id;
+      ctx.fillStyle = cur ? "#3f7d5a" : "rgba(255,253,246,.92)";
+      rr(ctx, c.x, c.y, dg.bw, dg.bh, 10); ctx.fill();
+      ctx.strokeStyle = cur ? "#2c5c41" : "#c9b78e"; ctx.lineWidth = 2; ctx.stroke();
+      text(ctx, d.name, c.x + dg.bw / 2, c.y + dg.bh * 0.36, dg.bh * 0.34,
+           cur ? "#ffffff" : "#6a5c44", "center", true);
+      text(ctx, d.blurb, c.x + dg.bw / 2, c.y + dg.bh * 0.72, dg.bh * 0.2,
+           cur ? "rgba(255,255,255,.85)" : "#9a8b6e");
+    }
   }
   function pickerCell(g, i) {
     return { x: g.x0 + (i % g.cols) * (g.cw + g.gapx),
@@ -623,8 +655,8 @@ var Render = (function () {
     // HUD(有大恶魔时变成双方比分)
     text(ctx, "Lv " + st.level, 14, top / 2, 20, "#365a8c", "left", true);
     var captives = st.rival ? st.rival.body.length - 3 : 0;
-    text(ctx, st.rival ? "You " + st.rescued + "/" + C.quota(st.level) + " · Demon " + captives
-                       : "Saved " + st.rescued + " / " + C.quota(st.level),
+    text(ctx, st.rival ? "You " + st.rescued + "/" + C.quota(st.level, st.diff) + " · Demon " + captives
+                       : "Saved " + st.rescued + " / " + C.quota(st.level, st.diff),
          w / 2, top / 2, st.rival ? 17 : 20, "#3f7d5a", "center", true);
     if (st.skill) {
       text(ctx, C.SKILLS[st.skill].name, w - 14, top / 2, 18, C.SKILLS[st.skill].dark, "right", true);
@@ -727,15 +759,16 @@ var Render = (function () {
         "Lead the little angel and the cross,",
         "gather lost believers into your line.",
         "Arrow keys / swipe to steer."
-      ], "Tap to start · Level " + st.level);
+      ], "Tap to start · Level " + st.level, px * 3.4);   // 上移,给难度/关卡选择让位
+      drawDiffPicker(ctx, C, st, w, h, px);
       drawLevelPicker(ctx, C, st, w, h, px);
     } else if (st.mode === "intro") {
-      var lines = ["Save " + C.quota(st.level) + " believers to clear the level"];
-      if (C.demonCount(st.level) > 0) lines.push(C.demonCount(st.level) + " little demons — don't touch them!");
+      var lines = ["Save " + C.quota(st.level, st.diff) + " believers to clear the level"];
+      if (C.demonCount(st.level, st.diff) > 0) lines.push(C.demonCount(st.level, st.diff) + " little demons — don't touch them!");
       if (C.hasRival(st.level)) {
         lines.push("A great demon races you for believers!");
         lines.push("Bump its tail to steal them back — avoid its head!");
-        if (C.rivalEvery(st.level) <= 2) lines.push("The great demon grows swift!");
+        if (C.rivalEvery(st.level, st.diff) <= 2) lines.push("The great demon grows swift!");
       }
       if (C.hasSkills(st.level)) lines.push("Grab the ⭐ for a skill — " + USE_HINT.toLowerCase());
       overlay(ctx, w, h, "Level " + st.level, lines, "Tap to set off");
@@ -743,12 +776,13 @@ var Render = (function () {
       overlay(ctx, w, h, "Level Cleared!", ["Level " + st.level + " · " + st.rescued + " believers saved"],
         st.level >= C.MAX_LEVEL ? "All 50 levels cleared! Tap to replay" : "Tap for level " + (st.level + 1));
     } else if (st.mode === "dead") {
-      overlay(ctx, w, h, "Oh no…", [st.deathMsg, "Saved " + st.rescued + " / " + C.quota(st.level)], "Tap to retry level " + st.level);
+      overlay(ctx, w, h, "Oh no…", [st.deathMsg, "Saved " + st.rescued + " / " + C.quota(st.level, st.diff)], "Tap to retry level " + st.level);
     }
   }
 
   return { HUD: HUD, canvasSize: canvasSize, skillBtn: skillBtn, draw: draw,
-           setUseHint: setUseHint, levelPickerHit: levelPickerHit };
+           setUseHint: setUseHint, levelPickerHit: levelPickerHit,
+           diffPickerHit: diffPickerHit };
 })();
 
 if (typeof module !== "undefined") module.exports = Render;

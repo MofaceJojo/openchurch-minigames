@@ -19,14 +19,15 @@ ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 var offX = (info.windowWidth - sz.w) / 2, offY = (info.windowHeight - sz.h) / 2;
 
 var st = Core.create(+(wx.getStorageSync("shepherd-level") || 1),
-                     wx.getStorageSync("shepherd-seen-skills") || {});
+                     wx.getStorageSync("shepherd-seen-skills") || {},
+                     wx.getStorageSync("shepherd-diff"));
 Render.setUseHint("Tap the button to use it", "Swipe or tap to continue");
 
 var lastTick = 0, lastFrame = 0;
 function loop(now) {
   var dt = lastFrame ? now - lastFrame : 16;
   lastFrame = now;
-  if (st.mode === "play" && now - lastTick >= Core.tickMs(st.level)) {
+  if (st.mode === "play" && now - lastTick >= Core.tickMs(st.level, st.diff)) {
     lastTick = now;
     Core.step(st);
     if (st.mode === "cheering") wx.setStorageSync("shepherd-level", Math.min(st.level + 1, Core.MAX_LEVEL));
@@ -52,6 +53,12 @@ wx.onTouchEnd(function (e) {
   var dx = x - touchStart.x, dy = y - touchStart.y;
   touchStart = null;
   if (Math.abs(dx) < 16 && Math.abs(dy) < 16) {
+    if (st.mode === "menu") {                      // 菜单页:难度按钮 / 关卡格子
+      var dd = Render.diffPickerHit(Core, sz.w, sz.h, px, x, y);
+      if (dd) { Core.setDifficulty(st, dd); wx.setStorageSync("shepherd-diff", dd); return; }
+      var lv = Render.levelPickerHit(Core, sz.w, sz.h, px, x, y);
+      if (lv) { Core.newLevel(st, lv); wx.setStorageSync("shepherd-level", lv); lastTick = Date.now(); return; }
+    }
     if (st.mode !== "play") { Core.advance(st); lastTick = Date.now(); return; }
     var b = Render.skillBtn(Core, px);
     var d2 = (x - b.x) * (x - b.x) + (y - b.y) * (y - b.y);
