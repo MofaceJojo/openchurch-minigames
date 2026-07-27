@@ -13,8 +13,8 @@
 </head>
 <body>
 <canvas id="cv"></canvas>
-<script src="core.js?v=20"></script>
-<script src="render.js?v=20"></script>
+<script src="core.js?v=21"></script>
+<script src="render.js?v=21"></script>
 <script>
 "use strict";
 const cv = document.getElementById("cv"), ctx = cv.getContext("2d");
@@ -42,19 +42,35 @@ function fit() {
 }
 fit(); addEventListener("resize", fit);
 
-let lastTick = 0, lastFrame = 0;
+let lastStepAt = 0, nextStepAt = 0, lastFrame = 0;
+
+function doStep(now) {
+  lastStepAt = now;
+  nextStepAt = now + Core.currentTickMs(st);
+  Core.step(st);
+  if (st.mode === "cheering") localStorage.setItem("shepherd-level", Math.min(st.level + 1, Core.MAX_LEVEL));
+  if (st.mode === "skillIntro") localStorage.setItem("shepherd-seen-skills", JSON.stringify(st.seenSkills));
+}
+function resetClock() { lastStepAt = performance.now(); nextStepAt = lastStepAt + Core.currentTickMs(st); }
+
+/* 转向即刻响应:宁可早一点,绝不迟到。
+   已过半拍就立刻走,否则把下一拍提前到半拍处(最多等半拍 ≈ 100ms) */
+function turn(vx, vy) {
+  if (st.mode !== "play") return;
+  if (!Core.setDir(st, vx, vy)) return;
+  const now = performance.now(), soonest = lastStepAt + Core.currentTickMs(st) * 0.5;
+  if (now >= soonest) doStep(now);
+  else nextStepAt = Math.min(nextStepAt, soonest);
+}
+
 function loop(now) {
   const dt = lastFrame ? now - lastFrame : 16;
   lastFrame = now;
-  if (st.mode === "play" && now - lastTick >= Core.currentTickMs(st)) {
-    lastTick = now;
-    Core.step(st);
-    if (st.mode === "cheering") localStorage.setItem("shepherd-level", Math.min(st.level + 1, Core.MAX_LEVEL));
-    if (st.mode === "skillIntro") localStorage.setItem("shepherd-seen-skills", JSON.stringify(st.seenSkills));
-  }
+  if (st.mode === "play" && now >= nextStepAt) doStep(now);
   Core.tickDying(st, dt);
   Core.tickFx(st, dt);
-  Render.draw(ctx, Core, st, px, now / 1000);
+  const span = nextStepAt - lastStepAt;
+  Render.draw(ctx, Core, st, px, now / 1000, span > 0 ? (now - lastStepAt) / span : 1);
   requestAnimationFrame(loop);
 }
 requestAnimationFrame(loop);
@@ -64,9 +80,9 @@ function confirmOrSkill(x, y) {
     const d = Render.diffPickerHit(Core, cv.clientWidth, cv.clientHeight, px, x, y);
     if (d) { Core.setDifficulty(st, d); localStorage.setItem("shepherd-diff", d); return; }
     const lv = Render.levelPickerHit(Core, cv.clientWidth, cv.clientHeight, px, x, y);
-    if (lv) { Core.newLevel(st, lv); localStorage.setItem("shepherd-level", lv); lastTick = performance.now(); return; }
+    if (lv) { Core.newLevel(st, lv); localStorage.setItem("shepherd-level", lv); resetClock(); return; }
   }
-  if (st.mode !== "play") { Core.advance(st); lastTick = performance.now(); return; }
+  if (st.mode !== "play") { Core.advance(st); resetClock(); return; }
   const b = Render.skillBtn(Core, px);
   if (st.skill && (x - b.x) ** 2 + (y - b.y) ** 2 <= (b.r * 1.3) ** 2) Core.useSkill(st);
 }
@@ -85,9 +101,9 @@ addEventListener("keydown", e => {
     e.preventDefault();
     // 暂停画面(关卡说明 / 技能讲解)按方向键 = 直接继续并朝该方向走
     if (st.mode === "skillIntro" || st.mode === "intro") {
-      Core.advance(st); lastTick = performance.now();
+      Core.advance(st); resetClock();
     }
-    if (st.mode === "play") Core.setDir(st, v[0], v[1]);
+    turn(v[0], v[1]);
   }
 });
 
@@ -98,10 +114,10 @@ cv.addEventListener("pointerup", e => {
   const dx = e.offsetX - p.x, dy = e.offsetY - p.y;
   if (Math.abs(dx) < 16 && Math.abs(dy) < 16) return confirmOrSkill(e.offsetX, e.offsetY);
   // 暂停画面滑动 = 继续并朝该方向走
-  if (st.mode === "skillIntro" || st.mode === "intro") { Core.advance(st); lastTick = performance.now(); }
+  if (st.mode === "skillIntro" || st.mode === "intro") { Core.advance(st); resetClock(); }
   if (st.mode !== "play") return;
   const v = Math.abs(dx) > Math.abs(dy) ? [Math.sign(dx), 0] : [0, Math.sign(dy)];
-  Core.setDir(st, v[0], v[1]);
+  turn(v[0], v[1]);
 });
 </script>
 </body>

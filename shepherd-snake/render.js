@@ -672,7 +672,7 @@ var Render = (function () {
     }
   }
 
-  function draw(ctx, C, st, px, t) {
+  function draw(ctx, C, st, px, t, alpha) {
     var sz = canvasSize(C, px), w = sz.w, h = sz.h, top = HUD * px, i;
 
     ctx.fillStyle = "#cde9f7"; ctx.fillRect(0, 0, w, h);           // 天空底
@@ -695,6 +695,19 @@ var Render = (function () {
     } else if (C.hasSkills(st.level)) text(ctx, "Skill: —", w - 14, top / 2, 18, "#b0a488", "right");
 
     function cc(p) { return { x: p.x * px + px / 2, y: top + p.y * px + px / 2 }; }
+
+    /* 两拍之间平滑滑动:第 i 节滑向它前面一节刚才的位置(索引一一对应即可)。
+       只在正常行进时插值,死亡/庆祝/暂停一律用真实格位。 */
+    var lerping = st.mode === "play" && st.prev && alpha != null && alpha < 1;
+    var a = lerping ? Math.max(0, Math.min(1, alpha)) : 1;
+    function ccL(list, prevList, i) {
+      var c = list[i];
+      if (!lerping || !prevList || !prevList.length) return cc(c);
+      var p = prevList[i] || prevList[prevList.length - 1];
+      if (Math.abs(c.x - p.x) > 1 || Math.abs(c.y - p.y) > 1) return cc(c);  // 瞬移不插值
+      return { x: (p.x + (c.x - p.x) * a) * px + px / 2,
+               y: top + (p.y + (c.y - p.y) * a) * px + px / 2 };
+    }
     var r = px * 0.42;
 
     var cheering = st.mode === "cheering";
@@ -709,8 +722,9 @@ var Render = (function () {
     }
     if (st.rival && !cheering) {
       // 尾巴:第 3 节起是被掳的信徒(灰紫、哭脸),前 2 节是恶魔身体
+      var rprev = st.prev && st.prev.rival;
       for (i = st.rival.body.length - 1; i >= 1; i--) {
-        var seg = cc(st.rival.body[i]);
+        var seg = ccL(st.rival.body, rprev, i);
         if (i >= 3) {
           circle(ctx, seg.x, seg.y, r * 0.8, "#cbbfe3", "#8f7cc0", 2);
           face(ctx, seg.x, seg.y, r * 0.8, false);
@@ -718,12 +732,13 @@ var Render = (function () {
           circle(ctx, seg.x, seg.y, r * 0.85, "#6b3bb8", "#4a2a86", 2.5);
         }
       }
-      var rh = cc(st.rival.body[0]);
+      var rh = ccL(st.rival.body, rprev, 0);
       drawDemon(ctx, rh.x, rh.y, r * 1.25, t, false);
     }
     var ghost = C.effectActive(st, "ghost");
-    if (!cheering) for (i = st.snake.length - 1; i >= 1; i--) { var s = cc(st.snake[i]); drawFollower(ctx, s.x, s.y, r * 0.88, i, ghost); }
-    var hd = cc(st.snake[0]);
+    var sprev = st.prev && st.prev.snake;
+    if (!cheering) for (i = st.snake.length - 1; i >= 1; i--) { var s = ccL(st.snake, sprev, i); drawFollower(ctx, s.x, s.y, r * 0.88, i, ghost); }
+    var hd = ccL(st.snake, sprev, 0);
     if (C.effectActive(st, "shield")) {
       ctx.strokeStyle = "rgba(242,193,78,.85)"; ctx.lineWidth = 4;
       circle(ctx, hd.x, hd.y, r * 1.5 + Math.sin(t * 8) * 2, null, "rgba(242,193,78,.85)", 4);

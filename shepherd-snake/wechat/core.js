@@ -96,7 +96,7 @@ var Core = (function () {
     st.snake = [{ x: 5, y: 8 }, { x: 5, y: 9 }, { x: 5, y: 10 }];
     st.dir = { x: 0, y: -1 }; st.nextDir = st.dir;
     st.demons = []; st.believers = []; st.pickups = [];
-    st.skill = null; st.effect = null; st.tickCount = 0; st.rescueFx = null; st.fx = null;
+    st.skill = null; st.effect = null; st.tickCount = 0; st.rescueFx = null; st.fx = null; st.prev = null;
     st.rival = hasRival(level)
       ? { body: [{ x: COLS - 2, y: 1 }, { x: COLS - 1, y: 1 }, { x: COLS - 1, y: 0 }] }
       : null;
@@ -130,9 +130,14 @@ var Core = (function () {
     return true;
   }
 
+  /* 返回 true 表示这是一次"新的转向" —— 壳层据此立刻走一拍,
+     让慢速下按键也是跟手的(不必干等一整拍) */
   function setDir(st, x, y) {
-    if (x === -st.dir.x && y === -st.dir.y) return;
+    if (x === -st.dir.x && y === -st.dir.y) return false;
+    var changed = (x !== st.nextDir.x || y !== st.nextDir.y) &&
+                  (x !== st.dir.x || y !== st.dir.y);
     st.nextDir = { x: x, y: y };
+    return changed;
   }
 
   function effectActive(st, type) {
@@ -248,8 +253,16 @@ var Core = (function () {
     }
   }
 
+  function copyCells(list) {
+    var out = [], i;
+    for (i = 0; i < list.length; i++) out.push({ x: list[i].x, y: list[i].y });
+    return out;
+  }
+
   function step(st) {
     if (st.mode !== "play") return;
+    // 记录上一拍位置,渲染层据此在两拍之间做平滑插值(慢速下不再是一格一跳)
+    st.prev = { snake: copyCells(st.snake), rival: st.rival ? copyCells(st.rival.body) : null };
     st.tickCount++;
     if (st.effect && --st.effect.ticksLeft <= 0) st.effect = null;
     rivalTick(st);
