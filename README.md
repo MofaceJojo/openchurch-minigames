@@ -48,6 +48,15 @@ shepherd-snake/
 - **改了 core.js / render.js 记得 `cp core.js render.js wechat/` 同步副本。**
 - 微信版用微信开发者工具打开 `wechat/`(compileType: game),本机尚未安装该工具,未真机验证。
 
+## 站点结构
+
+```
+index.html      ← 游戏站首页(品牌落地页,按 OpenChurch DESIGN.md)
+404.html        ← 找不到页面(Cloudflare Pages 自动使用)
+_headers        ← 缓存策略:HTML 不缓存,带 ?v= 的脚本长缓存
+shepherd-snake/ ← 游戏(页面左上角有 ← All games 返回首页)
+```
+
 ## 发布
 
 计划:GitHub 公开仓库 + GitHub Pages,每个游戏一个网址,手机直接玩。(待 owner 确认后开通)

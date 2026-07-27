@@ -1,0 +1,13 @@
+# Cloudflare Pages: HTML 不缓存(改了立刻见效),带版本号的脚本长缓存
+/*
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: strict-origin-when-cross-origin
+
+/*.html
+  Cache-Control: public, max-age=0, must-revalidate
+
+/
+  Cache-Control: public, max-age=0, must-revalidate
+
+/*.js
+  Cache-Control: public, max-age=31536000, immutable
