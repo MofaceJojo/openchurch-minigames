@@ -27,7 +27,7 @@ var lastTick = 0, lastFrame = 0;
 function loop(now) {
   var dt = lastFrame ? now - lastFrame : 16;
   lastFrame = now;
-  if (st.mode === "play" && now - lastTick >= Core.tickMs(st.level, st.diff)) {
+  if (st.mode === "play" && now - lastTick >= Core.currentTickMs(st)) {
     lastTick = now;
     Core.step(st);
     if (st.mode === "cheering") wx.setStorageSync("shepherd-level", Math.min(st.level + 1, Core.MAX_LEVEL));

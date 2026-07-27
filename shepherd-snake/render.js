@@ -207,11 +207,42 @@ var Render = (function () {
     ctx.restore();
   }
 
+  function iconStill(ctx, cx, cy, r, col, t) {    // 静止:沙漏,沙缓缓落下
+    var flow = (t * 0.35) % 1;
+    ctx.save(); ctx.translate(cx, cy);
+    ctx.strokeStyle = col; ctx.lineWidth = Math.max(2.2, r * 0.17); ctx.lineCap = "round";
+    ctx.beginPath();                               // 上下横梁
+    ctx.moveTo(-r * 0.62, -r * 0.78); ctx.lineTo(r * 0.62, -r * 0.78);
+    ctx.moveTo(-r * 0.62, r * 0.78); ctx.lineTo(r * 0.62, r * 0.78);
+    ctx.stroke();
+    ctx.beginPath();                               // 沙漏轮廓
+    ctx.moveTo(-r * 0.48, -r * 0.72);
+    ctx.lineTo(r * 0.48, -r * 0.72);
+    ctx.lineTo(0, 0);
+    ctx.lineTo(r * 0.48, r * 0.72);
+    ctx.lineTo(-r * 0.48, r * 0.72);
+    ctx.lineTo(0, 0);
+    ctx.closePath(); ctx.stroke();
+    ctx.fillStyle = col; ctx.globalAlpha = 0.5;    // 上半的沙
+    ctx.beginPath();
+    ctx.moveTo(-r * 0.4 * (1 - flow), -r * 0.6 + r * 0.6 * flow);
+    ctx.lineTo(r * 0.4 * (1 - flow), -r * 0.6 + r * 0.6 * flow);
+    ctx.lineTo(0, 0); ctx.closePath(); ctx.fill();
+    ctx.beginPath();                               // 下半堆起的沙
+    ctx.moveTo(-r * 0.42 * flow, r * 0.68);
+    ctx.lineTo(r * 0.42 * flow, r * 0.68);
+    ctx.lineTo(0, r * 0.68 - r * 0.5 * flow); ctx.closePath(); ctx.fill();
+    ctx.globalAlpha = 1;
+    ctx.fillRect(-r * 0.045, -r * 0.05, r * 0.09, r * 0.5);   // 落下的沙线
+    ctx.restore();
+  }
+
   function drawSkillIcon(ctx, C, id, cx, cy, r, t) {
     var col = C.SKILLS[id].color;
     if (id === "summon") iconGather(ctx, cx, cy, r, col, t);
     else if (id === "smite") iconSmite(ctx, cx, cy, r, col, t);
     else if (id === "shield") iconShield(ctx, cx, cy, r, col, t);
+    else if (id === "still") iconStill(ctx, cx, cy, r, col, t);
     else iconGhost(ctx, cx, cy, r, col, t);
   }
 
@@ -707,6 +738,18 @@ var Render = (function () {
     if (st.fx && !cheering) drawSkillFx(ctx, C, st, cc, px, top, r, t);
 
     if (st.mode === "cheering") drawCheer(ctx, C, st, w, h, top, px, r, t);
+
+    // 时间减慢:全屏淡青色调 + 边框脉冲 + 顶部字样,让玩家明确知道正在慢放
+    if (C.effectActive(st, "still") && st.mode === "play") {
+      var sp = 0.5 + 0.5 * Math.sin(t * 3);
+      ctx.save();
+      ctx.fillStyle = "rgba(63,154,168,.13)"; ctx.fillRect(0, top, w, h - top);
+      ctx.strokeStyle = "rgba(63,154,168," + (0.35 + 0.35 * sp) + ")";
+      ctx.lineWidth = 5 + 3 * sp;
+      ctx.strokeRect(3, top + 3, w - 6, h - top - 6);
+      text(ctx, "TIME SLOWED", w / 2, top + px * 0.75, px * 0.5, "#2c7885", "center", true);
+      ctx.restore();
+    }
 
     // 技能按钮:有技能时脉冲发光,刚捡到时飘一行提示
     if (st.skill && (st.mode === "play" || st.mode === "skillIntro")) {

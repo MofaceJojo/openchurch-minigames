@@ -8,11 +8,11 @@ var Core = (function () {
      speed 越大走得越慢,demons/quota 是数量倍率,rival 越大大恶魔越迟钝 */
   var DIFFS = {
     gentle: { id: "gentle", name: "Gentle", blurb: "Slow and forgiving",
-              speed: 1.55, demons: 0.4, quota: 0.7, rival: 1.6 },
+              speed: 1.28, demons: 0.4, quota: 0.7, rival: 1.6 },
     normal: { id: "normal", name: "Normal", blurb: "A steady stroll",
               speed: 1.0,  demons: 1,   quota: 1,   rival: 1 },
     brave:  { id: "brave",  name: "Brave",  blurb: "Quick and crowded",
-              speed: 0.82, demons: 1.3, quota: 1,   rival: 0.8 }
+              speed: 0.78, demons: 1.3, quota: 1,   rival: 0.8 }
   };
   var DIFF_IDS = ["gentle", "normal", "brave"];
   function diff(d) { return DIFFS[d] || DIFFS.normal; }
@@ -43,19 +43,28 @@ var Core = (function () {
     return level < 5 ? 0 : Math.min(4, 1 + Math.floor((level - 5) / 12));
   }           // 技能是玩具,早点给
   function tickMs(level, d) {
-    // 每 5 关提一档速度(玩家能明显感到"变快了"的爽感),
-    // 40 关到顶,之后不再用速度上难度——难度交给大恶魔蛇
-    return Math.round((200 - Math.min(8, Math.floor(level / 5)) * 8) * diff(d).speed);
+    // 每 5 关提一档速度(玩家能明显感到"变快了"的爽感),40 关到顶。
+    // 基准比初版慢约 20%:太快跟不上,太慢又断了连贯感,这一档是折中值。
+    return Math.round((235 - Math.min(8, Math.floor(level / 5)) * 8) * diff(d).speed);
   }
 
   var SKILLS = {
     summon: { name: "Gather", desc: "Nearby believers join your line at once", color: "#2f9e63", dark: "#1d6b42" },
     smite:  { name: "Smite",  desc: "Destroy the nearest little demon",        color: "#f4772b", dark: "#b34a0d" },
     shield: { name: "Shield", desc: "Demons can't hurt you for a while",       color: "#3d8ee0", dark: "#1f5c9e" },
-    ghost:  { name: "Spirit", desc: "Pass through your line and demons",       color: "#9b6fd6", dark: "#6a3fa8" }
+    ghost:  { name: "Spirit", desc: "Pass through your line and demons",       color: "#9b6fd6", dark: "#6a3fa8" },
+    still:  { name: "Be Still", desc: "Time slows to a gentle crawl",          color: "#3f9aa8", dark: "#226b78" }
   };
-  var SKILL_IDS = ["summon", "smite", "shield", "ghost"];
-  var EFFECT_TICKS = 30; // 护佑/灵体持续拍数
+  var SKILL_IDS = ["summon", "smite", "shield", "ghost", "still"];
+  var EFFECT_TICKS = 30;   // 护佑/灵体持续拍数
+  var STILL_TICKS = 16;    // 静止持续拍数(每拍本身被拉长,实际体感更久)
+  var STILL_FACTOR = 2.1;  // 静止时每拍时长倍数
+
+  /* 壳层每帧用它决定何时走下一拍 —— 把"时间减慢"算进去 */
+  function currentTickMs(st) {
+    var ms = tickMs(st.level, st.diff);
+    return effectActive(st, "still") ? Math.round(ms * STILL_FACTOR) : ms;
+  }
 
   function occupied(st, x, y) {
     var i;
@@ -166,7 +175,8 @@ var Core = (function () {
       }
       return { id: id };
     }
-    st.effect = { type: id, ticksLeft: EFFECT_TICKS }; // shield / ghost
+    // shield / ghost / still
+    st.effect = { type: id, ticksLeft: id === "still" ? STILL_TICKS : EFFECT_TICKS };
     st.fx = { type: id, at: { x: head.x, y: head.y }, ms: 0 };
     return { id: id };
   }
@@ -328,7 +338,8 @@ var Core = (function () {
     tickMs: tickMs, create: create, newLevel: newLevel, step: step,
     setDir: setDir, useSkill: useSkill, advance: advance, effectActive: effectActive,
     SUMMON_R: SUMMON_R, pickupCount: pickupCount, tickFx: tickFx, FX_MS: FX_MS,
-    DIFFS: DIFFS, DIFF_IDS: DIFF_IDS, setDifficulty: setDifficulty
+    DIFFS: DIFFS, DIFF_IDS: DIFF_IDS, setDifficulty: setDifficulty,
+    currentTickMs: currentTickMs, STILL_FACTOR: STILL_FACTOR
   };
 })();
 
