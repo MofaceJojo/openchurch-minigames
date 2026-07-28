@@ -1,0 +1,10 @@
+{
+  // OpenChurch 小游戏合集 —— 纯静态站,由 Cloudflare Workers 静态资源托管。
+  // 有了这个文件,连接的 GitHub 仓库每次 push 才能自动构建发布。
+  "name": "openchurch-minigames",
+  "compatibility_date": "2026-07-01",
+  "assets": {
+    "directory": "./",
+    "not_found_handling": "404-page"
+  }
+}
