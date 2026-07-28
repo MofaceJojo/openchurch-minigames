@@ -1,0 +1,9 @@
+# 不要上传到 Cloudflare 静态资源的东西
+# (否则 .git 里几百个对象文件也会被当成网页资源打包上传)
+.git
+.gitignore
+.assetsignore
+wrangler.jsonc
+README.md
+.DS_Store
+node_modules
