@@ -50,61 +50,57 @@ var Sfx = (function () {
     src.start(ctx.currentTime + t0);
   }
 
-  // 放圣泡:软软的“噗噜”下行泡泡音
+  // 放圣泡:软软的"噗噜"下行泡泡音,温柔可爱
   function place() {
     if (!ready()) return;
-    tone("sine", 620, 300, 0, 0.16, 0.20, "exp");
-    tone("sine", 900, 500, 0.05, 0.12, 0.10, "exp");
+    tone("sine", 680, 380, 0, 0.14, 0.16, "exp");
+    tone("sine", 950, 550, 0.03, 0.10, 0.08, "exp");
+    tone("triangle", 1200, 1400, 0, 0.06, 0.05);
   }
-  // 爆光:卡通“噗!”——短噪声砰 + 上滑泡泡,不暴力
+  // 爆光:温柔的"啵~"泡泡音
   function pop() {
     if (!ready()) return;
-    noise(0, 0.14, 0.20, 700);
-    tone("triangle", 200, 900, 0, 0.18, 0.16, "exp");
-    tone("square", 140, 80, 0.02, 0.10, 0.10);
+    tone("sine", 350, 1200, 0, 0.12, 0.12, "exp");
+    tone("triangle", 500, 900, 0, 0.10, 0.08, "exp");
   }
-  // 小鬼被驱散:滑哨往上飞 + “啵”,像被弹走
+  // 小鬼被驱散:滑哨往上飞 + "啵"
   function bless() {
     if (!ready()) return;
-    tone("sine", 320, 1500, 0, 0.30, 0.22, "exp");
-    tone("square", 180, 90, 0, 0.08, 0.10);
-    noise(0.02, 0.10, 0.12, 1600);
+    tone("sine", 400, 1600, 0, 0.25, 0.16, "exp");
+    tone("triangle", 600, 1000, 0, 0.10, 0.08, "exp");
   }
-  // 拾取道具:三个上行音,傻乎乎的小胜利
+  // 拾取道具:三个欢快上行音
   function chime() {
     if (!ready()) return;
-    var n = [523, 659, 880];
-    for (var i = 0; i < 3; i++) tone("triangle", n[i], n[i], 0.30 + i * 0.08, 0.13, 0.16);
+    tone("triangle", 587, 587, 0, 0.12, 0.12);
+    tone("triangle", 740, 740, 0.07, 0.12, 0.12);
+    tone("triangle", 880, 880, 0.14, 0.14, 0.12);
   }
-  // 失败:经典下滑长号 wah-wah-wah-waaah
+  // 失败:温柔下滑,不 harsh
   function die() {
     if (!ready()) return;
-    var n = [392, 370, 349, 294];
-    for (var i = 0; i < n.length; i++) {
-      var d = i === 3 ? 0.5 : 0.16;
-      tone("sawtooth", n[i], i === 3 ? n[i] * 0.7 : n[i], i * 0.17, d, 0.17, "exp");
-    }
+    tone("sine", 440, 330, 0, 0.18, 0.12, "exp");
+    tone("sine", 330, 262, 0.1, 0.18, 0.10, "exp");
+    tone("sine", 262, 196, 0.2, 0.30, 0.08, "exp");
   }
-  // 过关:小号吹的滑稽凯旋
+  // 过关:轻快小号
   function clear() {
     if (!ready()) return;
-    var seq = [[523,0],[659,0.11],[784,0.22],[1047,0.33],[880,0.5],[1047,0.6]];
-    for (var i = 0; i < seq.length; i++) tone("square", seq[i][0], seq[i][0], seq[i][1], 0.14, 0.15);
-    tone("sine", 1047, 1600, 0.72, 0.3, 0.14, "exp");
-    noise(0.72, 0.22, 0.10, 2400);
+    var seq = [[523,0],[659,0.10],[784,0.20],[1047,0.30],[880,0.48],[1047,0.60]];
+    for (var i = 0; i < seq.length; i++) tone("triangle", seq[i][0], seq[i][0], seq[i][1], 0.12, 0.10);
+    tone("sine", 1047, 1600, 0.65, 0.25, 0.10, "exp");
   }
-  // 全通关:更响亮的小号 fanfare
+  // 全通关:更欢快
   function win() {
     if (!ready()) return;
-    var seq = [[523,0],[659,0.12],[784,0.24],[1047,0.36],[784,0.52],[1047,0.62],[1319,0.74]];
-    for (var i = 0; i < seq.length; i++) tone("square", seq[i][0], seq[i][0], seq[i][1], 0.16, 0.16);
-    tone("sine", 1319, 1800, 0.92, 0.4, 0.15, "exp");
-    noise(0.92, 0.3, 0.10, 2600);
+    var seq = [[523,0],[659,0.10],[784,0.20],[1047,0.30],[784,0.48],[1047,0.60],[1319,0.72]];
+    for (var i = 0; i < seq.length; i++) tone("triangle", seq[i][0], seq[i][0], seq[i][1], 0.14, 0.11);
+    tone("sine", 1319, 1800, 0.84, 0.35, 0.12, "exp");
   }
   // 界面点击
   function tap() {
     if (!ready()) return;
-    tone("square", 660, 880, 0, 0.06, 0.08);
+    tone("triangle", 700, 900, 0, 0.05, 0.06);
   }
 
   return { init:init, setMuted:setMuted, isMuted:isMuted,

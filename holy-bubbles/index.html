@@ -12,18 +12,18 @@
 <meta property="og:type" content="website">
 <style>
   * { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
-  html, body { height:100%; overflow:hidden; background:#2b3a30; font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC",Roboto,sans-serif; }
+  html, body { height:100%; overflow:hidden; background:#3a3028; font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC",Roboto,sans-serif; }
   body { display:flex; flex-direction:column; touch-action:none; }
   #back {
     position:fixed; top:10px; left:10px; z-index:5;
-    font:600 13px/1 -apple-system,"Segoe UI","PingFang SC",sans-serif; color:#2c5c41;
+    font:600 13px/1 -apple-system,"Segoe UI","PingFang SC",sans-serif; color:#3a5a42;
     background:rgba(255,255,255,.82); backdrop-filter:blur(4px);
-    border:1px solid rgba(44,92,65,.22); border-radius:999px; padding:8px 14px; text-decoration:none;
+    border:1px solid rgba(90,140,100,.22); border-radius:999px; padding:8px 14px; text-decoration:none;
   }
   #mute {
     position:fixed; top:10px; right:10px; z-index:5; width:38px; height:38px; border-radius:999px;
-    border:1px solid rgba(44,92,65,.22); background:rgba(255,255,255,.82); backdrop-filter:blur(4px);
-    font-size:17px; color:#2c5c41; cursor:pointer;
+    border:1px solid rgba(90,140,100,.22); background:rgba(255,255,255,.82); backdrop-filter:blur(4px);
+    font-size:17px; color:#4a6a52; cursor:pointer;
   }
   #stage { flex:1; display:flex; align-items:center; justify-content:center; min-height:0; padding:6px; }
   canvas { border-radius:12px; box-shadow:0 8px 34px rgba(0,0,0,.35); touch-action:none; }
@@ -39,19 +39,19 @@
     width:min(42vw,180px); aspect-ratio:1; gap:7px;
   }
   .d {
-    border:none; border-radius:14px; background:rgba(255,255,255,.30); color:#1c3a2a;
+    border:none; border-radius:14px; background:rgba(255,255,255,.28); color:#3a4a38;
     font-size:22px; font-weight:700; display:flex; align-items:center; justify-content:center;
-    box-shadow:0 3px 0 rgba(0,0,0,.18); user-select:none; touch-action:none;
+    box-shadow:0 3px 0 rgba(0,0,0,.10); user-select:none; touch-action:none;
   }
-  .d:active { background:rgba(255,255,255,.6); transform:translateY(2px); box-shadow:0 1px 0 rgba(0,0,0,.18); }
+  .d:active { background:rgba(255,255,255,.50); transform:translateY(2px); box-shadow:0 1px 0 rgba(0,0,0,.10); }
   .up{grid-area:1/2} .left{grid-area:2/1} .right{grid-area:2/3} .down{grid-area:3/2}
   #bomb {
     flex:0 0 auto; width:min(34vw,150px); aspect-ratio:1; border-radius:50%;
     border:none; background:radial-gradient(circle at 38% 32%, #ffe9a8, #E0B04B 70%);
     color:#5a3a10; font:700 17px/1.1 -apple-system,"Segoe UI","PingFang SC",sans-serif;
-    box-shadow:0 5px 0 #b9862f, 0 8px 18px rgba(0,0,0,.3); user-select:none; touch-action:none;
+    box-shadow:0 4px 0 #b9862f, 0 6px 14px rgba(0,0,0,.20); user-select:none; touch-action:none;
   }
-  #bomb:active { transform:translateY(3px); box-shadow:0 2px 0 #b9862f, 0 4px 10px rgba(0,0,0,.3); }
+  #bomb:active { transform:translateY(2px); box-shadow:0 2px 0 #b9862f, 0 3px 8px rgba(0,0,0,.20); }
   @media (hover:hover) and (pointer:fine) { #pad { opacity:.55; } #pad:hover { opacity:1; } }
 </style>
 </head>

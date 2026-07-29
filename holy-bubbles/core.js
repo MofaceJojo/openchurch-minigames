@@ -8,12 +8,13 @@ var Core = (function () {
 
   // 每间房英文名字 + 配色(全部明亮,符合“画面必须明朗”红线)。render 用。
   var ROOM_NAMES = ["The Chapel", "The Cloister", "The Courtyard", "The Bell Tower", "The Holy Sanctuary"];
+  // 全部改用柔彩配色 —— 像泡泡堂/QQ堂那种粉彩暖光感
   var ROOM_THEME = [
-    { floor:"#f3e7cf", floor2:"#ecdcbe", wall:"#caa46a", wallTop:"#b98e52", accent:"#e9c46a" }, // chapel · wood
-    { floor:"#e9ecef", floor2:"#dde3e8", wall:"#9fb1bd", wallTop:"#8499a8", accent:"#8ecae6" }, // cloister · stone
-    { floor:"#dff3d8", floor2:"#cfeac4", wall:"#9ccb7a", wallTop:"#7fb45c", accent:"#a7d96a" }, // courtyard · grass
-    { floor:"#f6e3d6", floor2:"#efd6c4", wall:"#d39a6e", wallTop:"#bd8253", accent:"#f4a261" }, // bell tower
-    { floor:"#efe6f5", floor2:"#e4d6ef", wall:"#b79ad6", wallTop:"#9d7cc2", accent:"#c8a2e0" }  // sanctuary
+    { floor:"#fdf6ee", floor2:"#faf0e0", wall:"#e8cfa0", wallTop:"#f0ddc0", accent:"#f5d89a", soft:"#ffe8cc" }, // chapel · warm cream
+    { floor:"#f0f4f8", floor2:"#e8eef4", wall:"#c0d0e0", wallTop:"#d0e0f0", accent:"#a8c8e8", soft:"#d8e8f8" }, // cloister · baby blue stone
+    { floor:"#f0f8ee", floor2:"#e4f0dc", wall:"#b8d8a0", wallTop:"#c8e8b0", accent:"#d0e8a0", soft:"#e0f8d0" }, // courtyard · soft green
+    { floor:"#fdf2ec", floor2:"#fae8e0", wall:"#e0c8a0", wallTop:"#f0d8b0", accent:"#f0c880", soft:"#ffe0cc" }, // bell tower · warm peach
+    { floor:"#faf4f8", floor2:"#f2e8f4", wall:"#d0b8e0", wallTop:"#e0c8f0", accent:"#e0b0f0", soft:"#f0d8f8" }  // sanctuary · soft lavender
   ];
 
   var BOMB_FUSE = 2.0, BLAST_LIFE = 0.5;     // 圣泡引信 / 爆光存续(秒)
@@ -93,14 +94,16 @@ var Core = (function () {
       var c = open[j];
       if (md(c,{x:1,y:1}) < 4) continue;
       st.imps.push({ x:c.x+0.5, y:c.y+0.5, dir:{x:1,y:0}, speed:plan.impSpeed,
-                     dead:false, spin:0, deadT:0, wob:Math.random()*6.28 });
+                       dead:false, spin:0, deadT:0, wob:Math.random()*6.28,
+                       bob:0, squash:1, facing:1 });
     }
 
     st.powerups = []; st.bombs = []; st.blasts = []; st.fx = []; st.sounds = [];
 
     if (fresh || !st.player)
-      st.player = { x:1.5, y:1.5, dir:{x:0,y:0}, bombs:START_BOMBS, range:START_RANGE, speedMul:1, shieldT:0, dead:false, deadT:0 };
-    else { var p=st.player; p.x=1.5; p.y=1.5; p.dir={x:0,y:0}; p.dead=false; p.deadT=0; }
+      st.player = { x:1.5, y:1.5, dir:{x:0,y:0}, bombs:START_BOMBS, range:START_RANGE, speedMul:1, shieldT:0, dead:false, deadT:0,
+                     bob:0, squash:1, facing:1 };
+    else { var p=st.player; p.x=1.5; p.y=1.5; p.dir={x:0,y:0}; p.dead=false; p.deadT=0; p.bob=0; p.squash=1; }
 
     st.theme = ROOM_THEME[idx]; st.roomName = ROOM_NAMES[idx];
     st.mode = "intro"; st.introT=0; st.clearT=0; st.deadT=0; st.victoryT=0; st.msg="";
@@ -131,20 +134,28 @@ var Core = (function () {
   }
 
   // 沿单轴移动 + 交叉轴吸附(转角顺滑)。canEnter(st,x,y) 用中心点判定。
+  // 被挡住时不弹跳 — 温柔地停在边界上，沿墙滑行。
   function moveAxis(st, e, dir, sp, dt, canEnter){
     var step = sp*dt;
     if (dir.x !== 0){
       var ty = Math.round(e.y-0.5)+0.5;
       e.y = approach(e.y, ty, step);
       var nx = e.x + dir.x*step;
-      if (canEnter(st, nx, e.y)) e.x = nx;
-      else e.x = dir.x>0 ? Math.floor(nx)-RAD : Math.floor(nx)+1+RAD;
+      if (canEnter(st, nx, e.y)){ e.x = nx; }
+      else {
+        // 被挡住 — 平滑滑到边界，不弹跳
+        var wall = dir.x>0 ? Math.floor(nx+0.49)-RAD : Math.floor(nx+0.49)+1+RAD;
+        e.x = approach(e.x, wall, step*3);
+      }
     } else if (dir.y !== 0){
       var tx = Math.round(e.x-0.5)+0.5;
       e.x = approach(e.x, tx, step);
       var ny = e.y + dir.y*step;
-      if (canEnter(st, e.x, ny)) e.y = ny;
-      else e.y = dir.y>0 ? Math.floor(ny)-RAD : Math.floor(ny)+1+RAD;
+      if (canEnter(st, e.x, ny)){ e.y = ny; }
+      else {
+        var wall = dir.y>0 ? Math.floor(ny+0.49)-RAD : Math.floor(ny+0.49)+1+RAD;
+        e.y = approach(e.y, wall, step*3);
+      }
     }
   }
 
