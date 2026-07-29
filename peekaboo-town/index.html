@@ -35,9 +35,9 @@
 <a id="back" class="chip" href="../">← All games</a>
 <button id="sound" class="chip">🔊 Sound</button>
 <canvas id="cv"></canvas>
-<script src="audio.js?v=1"></script>
-<script src="core.js?v=1"></script>
-<script src="render.js?v=1"></script>
+<script src="audio.js?v=5"></script>
+<script src="core.js?v=5"></script>
+<script src="render.js?v=5"></script>
 <script>
 "use strict";
 const cv = document.getElementById("cv"), ctx = cv.getContext("2d");
@@ -62,14 +62,17 @@ soundBtn.addEventListener("click", e => {
   Sfx.tap();
 });
 
+/* 内部固定 2 倍超采样保持像素锐利,再用 CSS 缩放铺满屏幕 ——
+   这样手机上也能占满,不受整数倍缩放限制 */
+const SS = 2;
 function fit() {
-  s = Math.max(1, Math.floor(Math.min(
-    (innerWidth - 16) / Core.W,
-    (innerHeight - 16) / (Core.H + Render.HUD)
-  )));
+  s = SS;
   const sz = Render.canvasSize(Core, s);
   cv.width = sz.w; cv.height = sz.h;
-  cv.style.width = sz.w + "px"; cv.style.height = sz.h + "px";
+  const avail = Math.min((innerWidth - 16) / Core.W,
+                         (innerHeight - 16) / (Core.H + Render.HUD));
+  cv.style.width = (Core.W * avail) + "px";
+  cv.style.height = ((Core.H + Render.HUD) * avail) + "px";
   ctx.imageSmoothingEnabled = false;
 }
 fit(); addEventListener("resize", fit);
@@ -87,9 +90,16 @@ function loop(now) {
 }
 requestAnimationFrame(loop);
 
+/* 屏幕坐标 → 虚拟像素坐标(按 CSS 实际显示尺寸换算,不再用 s) */
 function toVirtual(e) {
   const r = cv.getBoundingClientRect();
-  return { x: (e.clientX - r.left) / s, y: (e.clientY - r.top) / s - Render.HUD };
+  const k = Core.W / r.width;
+  return { x: (e.clientX - r.left) * k, y: (e.clientY - r.top) * k - Render.HUD };
+}
+function toCanvasPx(e) {                    // 菜单命中判定用的画布内坐标
+  const r = cv.getBoundingClientRect();
+  const k = (Core.W * s) / r.width;
+  return { x: (e.clientX - r.left) * k, y: (e.clientY - r.top) * k };
 }
 
 cv.addEventListener("pointermove", e => { cursor = toVirtual(e); });
@@ -98,12 +108,12 @@ cv.addEventListener("pointerleave", () => { cursor = null; });
 cv.addEventListener("pointerdown", e => {
   e.preventDefault();
   Sfx.init();                                     // 首次手势里初始化音频
-  const r = cv.getBoundingClientRect();
   const v = toVirtual(e);
   cursor = v;
 
   if (st.mode === "menu") {
-    const d = Render.diffPickerHit(Core, s, e.clientX - r.left, e.clientY - r.top);
+    const cp = toCanvasPx(e);
+    const d = Render.diffPickerHit(Core, s, cp.x, cp.y);
     if (d) { Core.setDifficulty(st, d); localStorage.setItem("peekaboo-diff", d); Sfx.tap(); return; }
   }
   if (st.mode !== "play") {
