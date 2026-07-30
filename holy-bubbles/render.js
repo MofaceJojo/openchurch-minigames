@@ -36,6 +36,15 @@ var Render = (function () {
     g2.addColorStop(1, "rgba(255,240,210,0)");
     ctx.fillStyle = g2;
     ctx.fillRect(0,0,W,H);
+    // 微绒面暖点 — 像柔软地毯的细纹
+    ctx.globalAlpha = 0.04;
+    ctx.fillStyle = th.accent;
+    for (var y=0;y<Core.ROWS;y++) for (var x=0;x<Core.COLS;x++){
+      if ((x*7+y*13)%5===0){
+        var r = cellRect(px,x,y);
+        ctx.beginPath(); ctx.arc(r.x+r.w*0.5, r.y+r.h*0.5, px*0.03, 0, Math.PI*2); ctx.fill();
+      }
+    }
     ctx.globalAlpha = 1;
   }
   function drawWallsCrates(ctx, Core, st, px){
@@ -43,14 +52,21 @@ var Render = (function () {
     for (var y=0;y<Core.ROWS;y++) for (var x=0;x<Core.COLS;x++){
       var r = cellRect(px, x, y);
       if (Core.solidAt(st, x, y)){
-        ctx.fillStyle = th.wall; ctx.fillRect(r.x, r.y, r.w, r.h);
-        ctx.fillStyle = th.wallTop; ctx.fillRect(r.x, r.y, r.w, r.h*0.32);
-        // 柔光高光
-        ctx.fillStyle = "rgba(255,255,255,0.12)"; ctx.fillRect(r.x+r.w*0.12, r.y+r.h*0.40, r.w*0.20, r.h*0.35);
+        // 墙壁：软渐变+圆角，像毛绒软垫
+        var wg = ctx.createLinearGradient(r.x, r.y, r.x, r.y+r.h);
+        wg.addColorStop(0, th.wallTop);
+        wg.addColorStop(1, th.wall);
+        ctx.fillStyle = wg;
+        rr(ctx, r.x+0.5, r.y+0.5, r.w-1, r.h-1, px*0.08); ctx.fill();
+        // 顶面柔光
+        ctx.fillStyle = "rgba(255,255,240,0.18)";
+        ctx.fillRect(r.x+px*0.06, r.y+px*0.06, r.w-px*0.12, r.h*0.28);
         // 底部柔影
-        ctx.fillStyle = "rgba(0,0,0,0.06)"; ctx.fillRect(r.x, r.y+r.h*0.85, r.w, r.h*0.15);
-        ctx.strokeStyle = "rgba(255,255,255,0.08)"; ctx.lineWidth = 1;
-        rr(ctx, r.x+0.5, r.y+0.5, r.w-1, r.h-1, px*0.06); ctx.stroke();
+        ctx.fillStyle = "rgba(0,0,0,0.05)";
+        ctx.fillRect(r.x+px*0.04, r.y+r.h*0.82, r.w-px*0.08, r.h*0.18);
+        // 侧面暖边
+        ctx.strokeStyle = "rgba(255,255,230,0.12)"; ctx.lineWidth = 1;
+        rr(ctx, r.x+0.5, r.y+0.5, r.w-1, r.h-1, px*0.08); ctx.stroke();
       } else if (Core.crateAt(st, x, y)){
         // 玩具方块:圆润边角、暖棕、高光、小爱心标记
         ctx.fillStyle = "#e0b888"; rr(ctx, r.x+px*0.06, r.y+px*0.06, px*0.88, px*0.88, px*0.10); ctx.fill();
@@ -83,33 +99,31 @@ var Render = (function () {
   function drawPowerIcon(ctx, type, cx, cy, px){
     ctx.save();
     if (type === "bomb"){
-      ctx.fillStyle = "#4aa3e0";
-      ctx.beginPath(); ctx.arc(cx-px*0.08, cy+px*0.04, px*0.16, 0, 7); ctx.fill();
-      ctx.beginPath(); ctx.arc(cx+px*0.12, cy-px*0.06, px*0.11, 0, 7); ctx.fill();
+      // 柔和圆泡代替锐利弧线
+      ctx.fillStyle = "#7ac4e8";
+      ctx.beginPath(); ctx.arc(cx-px*0.06, cy+px*0.04, px*0.14, 0, Math.PI*2); ctx.fill();
+      ctx.beginPath(); ctx.arc(cx+px*0.10, cy-px*0.05, px*0.10, 0, Math.PI*2); ctx.fill();
       ctx.fillStyle = "rgba(255,255,255,0.8)";
-      ctx.beginPath(); ctx.arc(cx-px*0.12, cy, px*0.04, 0, 7); ctx.fill();
+      ctx.beginPath(); ctx.arc(cx-px*0.10, cy, px*0.03, 0, Math.PI*2); ctx.fill();
     } else if (type === "range"){
-      ctx.fillStyle = "#047857";
-      ctx.fillRect(cx-px*0.05, cy-px*0.20, px*0.10, px*0.40);
-      ctx.fillRect(cx-px*0.20, cy-px*0.05, px*0.40, px*0.10);
+      // 柔圆代替硬朗矩形
+      ctx.fillStyle = "#7dd4a0";
+      ctx.beginPath(); ctx.arc(cx, cy-px*0.15, px*0.05, 0, Math.PI*2); ctx.fill();
+      ctx.beginPath(); ctx.arc(cx, cy+px*0.15, px*0.05, 0, Math.PI*2); ctx.fill();
+      ctx.beginPath(); ctx.arc(cx-px*0.15, cy, px*0.05, 0, Math.PI*2); ctx.fill();
+      ctx.beginPath(); ctx.arc(cx+px*0.15, cy, px*0.05, 0, Math.PI*2); ctx.fill();
     } else if (type === "speed"){
-      ctx.fillStyle = "#e0762b";
+      // 圆润光点代替尖锐三角
+      ctx.fillStyle = "#f5a060";
       for (var k=0;k<2;k++){
-        var ox = cx-px*0.14 + k*px*0.16;
-        ctx.beginPath();
-        ctx.moveTo(ox-px*0.08, cy-px*0.18); ctx.lineTo(ox+px*0.10, cy); ctx.lineTo(ox-px*0.08, cy+px*0.18);
-        ctx.lineTo(ox-px*0.02, cy+px*0.18); ctx.lineTo(ox+px*0.16, cy); ctx.lineTo(ox-px*0.02, cy-px*0.18);
-        ctx.closePath(); ctx.fill();
+        var ox = cx-px*0.12 + k*px*0.24;
+        ctx.beginPath(); ctx.arc(ox, cy, px*0.08, 0, Math.PI*2); ctx.fill();
       }
     } else if (type === "shield"){
-      ctx.fillStyle = "#d9a94e";
-      ctx.beginPath();
-      ctx.moveTo(cx, cy-px*0.20); ctx.lineTo(cx+px*0.17, cy-px*0.10);
-      ctx.lineTo(cx+px*0.17, cy+px*0.06); ctx.lineTo(cx, cy+px*0.20);
-      ctx.lineTo(cx-px*0.17, cy+px*0.06); ctx.lineTo(cx-px*0.17, cy-px*0.10);
-      ctx.closePath(); ctx.fill();
-      ctx.fillStyle = "#fff"; ctx.fillRect(cx-px*0.03, cy-px*0.10, px*0.06, px*0.18);
-      ctx.fillRect(cx-px*0.10, cy-px*0.03, px*0.20, px*0.06);
+      // 柔圆泡代替棱角盾牌
+      ctx.fillStyle = "#f0d068";
+      ctx.beginPath(); ctx.arc(cx, cy, px*0.18, 0, Math.PI*2); ctx.fill();
+      ctx.fillStyle = "#fff"; ctx.beginPath(); ctx.arc(cx, cy, px*0.10, 0, Math.PI*2); ctx.fill();
     }
     ctx.restore();
   }
@@ -145,11 +159,9 @@ var Render = (function () {
         ctx.beginPath(); ctx.arc(cx, cy-R*0.55, sparkR, 0, Math.PI*2); ctx.fill();
       }
 
-      // 十字温柔标记
-      ctx.strokeStyle = fuse > 0.8 ? "rgba(255,120,60,0.5)" : "rgba(200,160,60,0.3)";
-      ctx.lineWidth = Math.max(1, px*0.03); ctx.lineCap = "round";
-      ctx.beginPath(); ctx.moveTo(cx, cy-R*0.45); ctx.lineTo(cx, cy+R*0.45); ctx.stroke();
-      ctx.beginPath(); ctx.moveTo(cx-R*0.45, cy); ctx.lineTo(cx+R*0.45, cy); ctx.stroke();
+      // 十字温柔标记 → 柔和小光点
+      ctx.fillStyle = fuse > 0.8 ? "rgba(255,160,80,0.45)" : "rgba(200,160,60,0.25)";
+      ctx.beginPath(); ctx.arc(cx, cy, R*0.15, 0, Math.PI*2); ctx.fill();
     }
   }
 
