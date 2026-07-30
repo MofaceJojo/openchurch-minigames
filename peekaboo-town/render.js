@@ -163,7 +163,9 @@ var Render = (function () {
     // 否则一圈深色边框比色差本身还显眼
     var line = shade(body, -(5 + (1 - camo) * 12));
     var peek = C.isPeeking(st, d);
-    var x = d.x + (peek ? Math.round(Math.sin(t * 20)) : 0), y = d.y;
+    // y 必须带上 HUD 偏移 —— 场景里其它东西(房子/树/光标环)都是画在 HUD 下方的,
+    // 这里漏加会让小鬼比命中判定的位置高一整个 HUD,玩家得瞄准它下方才打得中
+    var x = d.x + (peek ? Math.round(Math.sin(t * 20)) : 0), y = HUD + d.y;
 
     // 角
     px(ctx, s, x + 2, y, 2, 3, line);
@@ -229,14 +231,14 @@ var Render = (function () {
       for (i = 0; i < 4; i++) {
         var sp = Math.max(0, q - i * 0.1);
         if (sp <= 0) continue;
-        px(ctx, s, xx + 5 + Math.sin(sp * 20 + i) * 7, d.y + 6 - sp * sp * 230 + 9 + i * 6,
+        px(ctx, s, xx + 5 + Math.sin(sp * 20 + i) * 7, HUD + d.y + 6 - sp * sp * 230 + 9 + i * 6,
            3, 3, "rgba(255,220,90," + (1 - sp).toFixed(2) + ")");
       }
     }
     var ap = Math.min(1, Math.max(0, (p - 0.18) / 0.5));
     if (ap > 0) {
       var hop = Math.abs(Math.sin(t * 7)) * 4;
-      var bx = d.x + 1, by = d.y + 4 - hop;
+      var bx = d.x + 1, by = HUD + d.y + 4 - hop;
       px(ctx, s, bx + 2, by, 7, 6, "#f9dcb4");                    // 头
       px(ctx, s, bx + 2, by, 7, 2, "#7a4a2c");                    // 头发
       px(ctx, s, bx + 3, by + 3, 1, 1, "#3d3226");
