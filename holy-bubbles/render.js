@@ -23,18 +23,19 @@ var Render = (function () {
   function drawFloor(ctx, Core, st, px){
     var th = st.theme;
     var W = Core.COLS*px, H = Core.ROWS*px;
-    var g = ctx.createLinearGradient(0,0,0,H);
+    // 温暖径向渐变 — 像房间里从上方暖灯照亮
+    var g = ctx.createRadialGradient(W/2, H*0.42, 0, W/2, H*0.42, Math.max(W,H)*0.68);
     g.addColorStop(0, th.floor);
     g.addColorStop(1, th.floor2);
     ctx.fillStyle = g;
     ctx.fillRect(0,0,W,H);
-    // 柔光格子纹路
-    ctx.globalAlpha = 0.08;
-    for (var y=0;y<Core.ROWS;y++) for (var x=0;x<Core.COLS;x++){
-      var r = cellRect(px,x,y);
-      ctx.fillStyle = ((x+y)&1) ? th.accent : th.soft;
-      ctx.fillRect(r.x, r.y, r.w, r.h);
-    }
+    // 中心柔光
+    ctx.globalAlpha = 0.10;
+    var g2 = ctx.createRadialGradient(W/2, H*0.38, 0, W/2, H*0.38, W*0.5);
+    g2.addColorStop(0, "rgba(255,240,210,0.6)");
+    g2.addColorStop(1, "rgba(255,240,210,0)");
+    ctx.fillStyle = g2;
+    ctx.fillRect(0,0,W,H);
     ctx.globalAlpha = 1;
   }
   function drawWallsCrates(ctx, Core, st, px){
@@ -51,15 +52,16 @@ var Render = (function () {
         ctx.strokeStyle = "rgba(255,255,255,0.08)"; ctx.lineWidth = 1;
         rr(ctx, r.x+0.5, r.y+0.5, r.w-1, r.h-1, px*0.06); ctx.stroke();
       } else if (Core.crateAt(st, x, y)){
-        // 木箱:暖棕、交叉木条 + 小十字
-        ctx.fillStyle = "#c79a5b"; rr(ctx, r.x+px*0.08, r.y+px*0.08, px*0.84, px*0.84, px*0.12); ctx.fill();
-        ctx.strokeStyle = "rgba(120,80,30,0.55)"; ctx.lineWidth = Math.max(1.5, px*0.06);
-        ctx.beginPath();
-        ctx.moveTo(r.x+px*0.12, r.y+px*0.12); ctx.lineTo(r.x+px*0.88, r.y+px*0.88);
-        ctx.moveTo(r.x+px*0.88, r.y+px*0.12); ctx.lineTo(r.x+px*0.12, r.y+px*0.88);
-        ctx.stroke();
-        ctx.fillStyle = "rgba(255,255,255,0.5)"; ctx.fillRect(r.x+px*0.42, r.y+px*0.30, px*0.16, px*0.40);
-        ctx.fillRect(r.x+px*0.30, r.y+px*0.42, px*0.40, px*0.16);
+        // 玩具方块:圆润边角、暖棕、高光、小爱心标记
+        ctx.fillStyle = "#e0b888"; rr(ctx, r.x+px*0.06, r.y+px*0.06, px*0.88, px*0.88, px*0.10); ctx.fill();
+        // 顶面柔光
+        ctx.fillStyle = "rgba(255,255,230,0.20)"; ctx.fillRect(r.x+px*0.08, r.y+px*0.08, px*0.84, px*0.35);
+        // 侧面暖影
+        ctx.fillStyle = "rgba(140,80,20,0.08)"; ctx.fillRect(r.x+px*0.08, r.y+px*0.70, px*0.84, px*0.28);
+        // 小十字装饰(可爱标记)
+        ctx.strokeStyle = "rgba(160,110,50,0.35)"; ctx.lineWidth = Math.max(1, px*0.035); ctx.lineCap = "round";
+        ctx.beginPath(); ctx.moveTo(r.x+px*0.45, r.y+px*0.25); ctx.lineTo(r.x+px*0.45, r.y+px*0.55); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(r.x+px*0.30, r.y+px*0.40); ctx.lineTo(r.x+px*0.60, r.y+px*0.40); ctx.stroke();
       }
     }
   }
@@ -461,6 +463,14 @@ var Render = (function () {
     drawPlayer(ctx, st, px, now);
     drawFx(ctx, Core, st, px);
     drawHUD(ctx, Core, st, px);
+
+    // 柔光晕 + 暖角暗角 — 让画面像画在温暖房间里的画框
+    var vg = ctx.createRadialGradient(w/2, h/2, Math.min(w,h)*0.35, w/2, h/2, Math.max(w,h)*0.72);
+    vg.addColorStop(0, "rgba(0,0,0,0)");
+    vg.addColorStop(0.6, "rgba(0,0,0,0)");
+    vg.addColorStop(1, "rgba(60,35,15,0.14)");
+    ctx.fillStyle = vg;
+    ctx.fillRect(0,0,w,h);
 
     if (st.mode === "menu") drawMenu(ctx, Core, st, px, w, h);
     else if (st.mode === "intro") drawBanner(ctx, Core, st, px, w, h, st.roomName, "Room " + (st.room+1) + " · get ready!");

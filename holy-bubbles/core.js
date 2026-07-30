@@ -46,7 +46,10 @@ var Core = (function () {
   function key(x,y){ return x + "," + y; }
   function inB(x,y){ return x>=0 && y>=0 && x<COLS && y<ROWS; }
   function md(a,b){ return Math.abs(a.x-b.x)+Math.abs(a.y-b.y); }
-  function approach(v,t,s){ return v<t ? Math.min(v+s,t) : Math.max(v-s,t); }
+  var approach = function(v,t,s){ return v<t ? Math.min(v+s,t) : Math.max(v-s,t); };
+  // 碰到墙/箱即硬卡到位，不渐进靠近——彻底消除边界微颤
+  function clampAxis(v, lo, hi){ return Math.max(lo, Math.min(v, hi)); }
+
   function shuffle(a){ for(var i=a.length-1;i>0;i--){ var j=(Math.random()*(i+1))|0; var t=a[i];a[i]=a[j];a[j]=t; } return a; }
 
   function create(savedDiff){
@@ -143,9 +146,9 @@ var Core = (function () {
       var nx = e.x + dir.x*step;
       if (canEnter(st, nx, e.y)){ e.x = nx; }
       else {
-        // 被挡住 — 平滑滑到边界，不弹跳
+        // 被挡住时硬卡到边界，不渐进——彻底消除抖动
         var wall = dir.x>0 ? Math.floor(nx+0.49)-RAD : Math.floor(nx+0.49)+1+RAD;
-        e.x = approach(e.x, wall, step*3);
+        e.x = wall;
       }
     } else if (dir.y !== 0){
       var tx = Math.round(e.x-0.5)+0.5;
@@ -153,8 +156,9 @@ var Core = (function () {
       var ny = e.y + dir.y*step;
       if (canEnter(st, e.x, ny)){ e.y = ny; }
       else {
+        // 被挡住时硬卡到边界，不渐进——彻底消除抖动
         var wall = dir.y>0 ? Math.floor(ny+0.49)-RAD : Math.floor(ny+0.49)+1+RAD;
-        e.y = approach(e.y, wall, step*3);
+        e.y = wall;
       }
     }
   }

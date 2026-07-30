@@ -26,7 +26,7 @@
     font-size:17px; color:#4a6a52; cursor:pointer;
   }
   #stage { flex:1; display:flex; align-items:center; justify-content:center; min-height:0; padding:6px; }
-  canvas { border-radius:12px; box-shadow:0 8px 34px rgba(0,0,0,.35); touch-action:none; }
+  canvas { border-radius:16px; box-shadow:0 6px 28px rgba(50,30,15,.22); touch-action:none; }
 
   /* 触屏控制条:虚拟方向键(左) + 圣泡按钮(右) */
   #pad {
@@ -105,9 +105,11 @@ function applyKeyDir(){
 }
 const KEYMAP = { ArrowUp:[0,-1], ArrowDown:[0,1], ArrowLeft:[-1,0], ArrowRight:[1,0], w:[0,-1], s:[0,1], a:[-1,0], d:[1,0] };
 addEventListener("keydown", e => {
+  // 阻止所有浏览器默认行为（防止空格滚动/Alt弹菜单/浏览器快捷键）
+  if (e.key !== "Alt" && e.key !== "Control" && e.key !== "Meta" && e.key !== "Shift") e.preventDefault();
   if (e.key === " " || e.code === "Space"){ e.preventDefault(); if(e.repeat) return; onAction(); return; }
   const v = KEYMAP[e.key];
-  if (v){ e.preventDefault();
+  if (v){
     const i = held.findIndex(h => h.x===v[0] && h.y===v[1]);
     if (i<0) held.push({x:v[0], y:v[1]});
     applyKeyDir();
