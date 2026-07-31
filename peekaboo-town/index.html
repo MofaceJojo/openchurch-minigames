@@ -16,7 +16,7 @@
   body { display: flex; align-items: center; justify-content: center; }
   canvas {
     touch-action: none; border-radius: 10px; cursor: crosshair;
-    image-rendering: pixelated; box-shadow: 0 10px 34px rgba(60,100,120,.28);
+box-shadow: 0 10px 34px rgba(60,100,120,.28);
   }
   .chip {
     position: fixed; top: 12px; z-index: 2;
@@ -35,9 +35,9 @@
 <a id="back" class="chip" href="../">← All games</a>
 <button id="sound" class="chip">🔊 Sound</button>
 <canvas id="cv"></canvas>
-<script src="audio.js?v=8"></script>
-<script src="core.js?v=8"></script>
-<script src="render.js?v=8"></script>
+<script src="audio.js?v=10"></script>
+<script src="core.js?v=10"></script>
+<script src="render.js?v=10"></script>
 <script>
 "use strict";
 const cv = document.getElementById("cv"), ctx = cv.getContext("2d");

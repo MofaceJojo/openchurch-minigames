@@ -7,7 +7,7 @@
 var Core = (function () {
   var W = 240, H = 360;
   var MAX_LEVEL = 30;
-  var OBJ_W = 15, OBJ_H = 17;          // 物件(也是小鬼)的统一尺寸
+  var OBJ_W = 21, OBJ_H = 23;          // 物件(也是小鬼)的统一尺寸,放大以容纳细节
 
   var DIFFS = {
     gentle: { id: "gentle", name: "Gentle", blurb: "Slow, easy to spot",
@@ -22,25 +22,25 @@ var Core = (function () {
 
   /* ---- 四种场景;每种有自己可用的伪装物件 ---- */
   var SCENES = [
-    { id: "town",   name: "Sunny Street", objs: ["window", "pot", "bush"] },
-    { id: "market", name: "Market Day",   objs: ["crate", "barrel", "basket", "lantern"] },
-    { id: "garden", name: "The Garden",   objs: ["pot", "bush", "basket"] },
-    { id: "river",  name: "Riverside",    objs: ["rock", "barrel", "crate", "bush"] }
+    { id: "kitchen", name: "Kitchen Counter", objs: ["mug", "jar", "canister", "teapot", "bowl"] },
+    { id: "living",  name: "Living Room",     objs: ["book", "frame", "plant", "candle", "bowl"] },
+    { id: "shed",    name: "Potting Shed",    objs: ["pot", "canister", "jar", "basket", "wateringcan"] },
+    { id: "study",   name: "Study Desk",      objs: ["book", "mug", "frame", "plant", "clock"] }
   ];
   function sceneFor(level) { return SCENES[(level - 1) % SCENES.length]; }
 
-  function impCount(level) { return Math.min(6, 1 + Math.floor((level - 1) / 4)); }
+  function impCount(level) { return Math.min(7, 1 + Math.floor((level - 1) / 3.2)); }
   // 场上的「无辜物件」数量 —— 越多越难找,这是本作真正的难度来源
   function decoyCount(level, d) {
-    return Math.round(Math.min(26, 6 + level * 0.9) * diff(d).decoy);
+    return Math.round(Math.min(30, 8 + level * 1.1) * diff(d).decoy);
   }
   function timeLimit(level, d) {
-    return Math.round((45 + impCount(level) * 13) * diff(d).time);
+    return Math.round((38 + impCount(level) * 11) * diff(d).time);
   }
   function camoStrength(level, d) {    // 0=破绽明显, 1=几乎和真物件一样
-    return Math.min(0.95, (0.34 + (level - 1) * 0.021) * diff(d).camo);
+    return Math.min(0.96, (0.46 + (level - 1) * 0.019) * diff(d).camo);
   }
-  function peekEvery(level, d) { return (2.0 + (level - 1) * 0.1) * diff(d).tell; }
+  function peekEvery(level, d) { return (2.4 + (level - 1) * 0.13) * diff(d).tell; }
   function maxMisses(level, d) { return diff(d).misses; }
   function hintCount(level, d) { return diff(d).hints; }
 
@@ -59,47 +59,53 @@ var Core = (function () {
     var sc = { id: scene.id, name: scene.name, clouds: [], props: [], objects: [], imps: [] };
     var i;
 
-    sc.sun = { x: 34 + (R() * 20 | 0), y: 32 };
-    for (i = 0; i < 5; i++)
-      sc.clouds.push({ x: (R() * W) | 0, y: 18 + (R() * 60 | 0), w: 26 + (R() * 24 | 0), sp: 0.25 + R() * 0.5 });
-
-    // 每种场景的背景陈设(纯装饰,不能藏小鬼)
-    if (scene.id === "town") {
-      var x = -4;
-      while (x < W) {
-        var hw = 44 + (R() * 24 | 0), hh = 66 + (R() * 44 | 0), ci = (R() * 7) | 0;
-        sc.props.push({ kind: "house", x: x, y: H - 116 - hh, w: hw, h: hh, ci: ci, door: R() < 0.6 });
-        x += hw + 3;
-      }
-    } else if (scene.id === "market") {
-      for (i = 0; i < 4; i++)
-        sc.props.push({ kind: "stall", x: 6 + i * 60 + (R() * 10 | 0), y: 148 + (R() * 22 | 0),
-                        w: 52, ci: (R() * 7) | 0 });
-    } else if (scene.id === "garden") {
-      for (i = 0; i < 3; i++)
-        sc.props.push({ kind: "hedge", x: -6 + (R() * 20 | 0), y: 150 + i * 44, w: W + 12, h: 20 });
-      for (i = 0; i < 4; i++)
-        sc.props.push({ kind: "tree", x: 14 + i * 60 + (R() * 16 | 0), y: 120 + (R() * 20 | 0),
-                        r: 20 + (R() * 6 | 0) });
-    } else {
-      sc.props.push({ kind: "water", y: H - 132 });
-      for (i = 0; i < 5; i++)
-        sc.props.push({ kind: "reed", x: 10 + i * 48 + (R() * 20 | 0), y: H - 138 + (R() * 16 | 0) });
-      sc.props.push({ kind: "dock", x: 40 + (R() * 60 | 0), y: H - 96, w: 78 });
+    // 每种场景的背景陈设(纯装饰,不藏小鬼)。都是明亮的日常室内。
+    if (scene.id === "kitchen") {
+      sc.window = { x: 150, y: 34, w: 74, h: 62 };              // 洒进阳光的窗
+      sc.shelves = [{ y: 132, x: 8, w: W - 16 }, { y: 214, x: 8, w: W - 16 }];
+      sc.counter = { y: 292 };
+      sc.tiles = true;
+      sc.surfaces = [{ y: 132, x0: 10, x1: 142 }, { y: 214, x0: 10, x1: W - 12 },
+                     { y: 292, x0: 6, x1: W - 8 }, { y: 336, x0: 6, x1: W - 8 }];
+    } else if (scene.id === "living") {
+      sc.window = { x: 18, y: 30, w: 78, h: 66 };
+      sc.sofa = { x: 12, y: 246, w: W - 24, h: 62 };
+      sc.shelves = [{ y: 140, x: 116, w: 116 }];
+      sc.rug = { y: 322 };
+      sc.lamp = { x: 24, y: 178 };
+      sc.surfaces = [{ y: 140, x0: 118, x1: W - 12 }, { y: 250, x0: 16, x1: W - 18 },
+                     { y: 322, x0: 6, x1: W - 8 }, { y: 352, x0: 6, x1: W - 8 }];
+    } else if (scene.id === "shed") {
+      sc.window = { x: 96, y: 28, w: 62, h: 52 };
+      sc.pegboard = { x: 8, y: 104, w: W - 16, h: 74 };
+      sc.shelves = [{ y: 198, x: 6, w: W - 12 }];
+      sc.bench = { y: 282 };
+      sc.surfaces = [{ y: 104, x0: 10, x1: 90 }, { y: 198, x0: 8, x1: W - 10 },
+                     { y: 282, x0: 6, x1: W - 8 }, { y: 334, x0: 6, x1: W - 8 }];
+    } else {                                                     // study
+      sc.window = { x: 20, y: 26, w: 68, h: 58 };
+      sc.pinboard = { x: 106, y: 96, w: 126, h: 82 };
+      sc.shelves = [{ y: 196, x: 6, w: W - 12 }];
+      sc.desk = { y: 274 };
+      sc.surfaces = [{ y: 96, x0: 12, x1: 96 }, { y: 196, x0: 8, x1: W - 10 },
+                     { y: 274, x0: 6, x1: W - 8 }, { y: 330, x0: 6, x1: W - 8 }];
     }
+    for (i = 0; i < 4; i++)                                      // 窗外飘过的云
+      sc.clouds.push({ x: (R() * W) | 0, y: 10 + (R() * 40 | 0), w: 16 + (R() * 14 | 0), sp: 0.2 + R() * 0.4 });
 
     // ---- 摆放物件:先算出所有互不重叠的落点 ----
+    // ---- 沿「平面」摆放:物件底边贴着搁板/台面,不再悬空 ----
     var slots = [], tries = 0;
-    var yTop = scene.id === "town" ? 132 : 118;
-    var yBot = H - OBJ_H - 8;
     var want = decoyCount(level, d) + impCount(level);
-    while (slots.length < want && tries++ < 900) {
-      var p = { x: 4 + (R() * (W - OBJ_W - 8) | 0), y: yTop + (R() * (yBot - yTop) | 0) };
+    while (slots.length < want && tries++ < 1200) {
+      var surf = sc.surfaces[(R() * sc.surfaces.length) | 0];
+      var px2 = surf.x0 + (R() * Math.max(1, surf.x1 - surf.x0 - OBJ_W) | 0);
+      var p = { x: px2, y: surf.y - OBJ_H };
       // 右下角是提示按钮,物件不能压在它下面 —— 否则点它只会触发提示,永远打不中
       if (p.x + OBJ_W > W - 42 && p.y + OBJ_H > H - 42) continue;
       var ok = true;
       for (i = 0; i < slots.length; i++)
-        if (Math.abs(slots[i].x - p.x) < OBJ_W + 4 && Math.abs(slots[i].y - p.y) < OBJ_H + 4) { ok = false; break; }
+        if (Math.abs(slots[i].y - p.y) < 4 && Math.abs(slots[i].x - p.x) < OBJ_W + 3) { ok = false; break; }
       if (ok) slots.push(p);
     }
 
@@ -195,7 +201,7 @@ var Core = (function () {
         var d = st.scene.imps[i];
         if (d.found) continue;
         if (st.elapsed >= d.peekAt && !d.peeked) { d.peeked = true; events.peeked = true; }
-        if (st.elapsed >= d.peekAt + 0.55) {
+        if (st.elapsed >= d.peekAt + 0.42) {
           d.peekAt = st.elapsed + period + Math.random() * period * 0.6;
           d.peeked = false;
         }
@@ -216,7 +222,7 @@ var Core = (function () {
   function isPeeking(st, d) {
     if (d.found) return false;
     var since = st.elapsed - d.peekAt;
-    return since >= 0 && since < 0.55;
+    return since >= 0 && since < 0.42;
   }
 
   function advance(st) {
