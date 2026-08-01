@@ -58,6 +58,7 @@ window.addEventListener("resize", () => { resize(); Core.render(); });
 resize();
 
 soundBtn.onclick = () => Audio.toggle();
+document.getElementById("hintChip").onclick = () => Core.useHint();
 
 cv.addEventListener("click", (e) => {
   const rect = cv.getBoundingClientRect();
@@ -75,6 +76,7 @@ cv.addEventListener("touchstart", (e) => {
 }, { passive: false });
 
 Core.init(cv, ctx);
+(function loop() { Core.render(); requestAnimationFrame(loop); })();
 </script>
 </body>
 </html>

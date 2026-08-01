@@ -43,9 +43,12 @@ var Core = (function () {
   function camoStrength(level, d) {    // 0=破绽明显, 1=几乎和真物件一样
     return Math.min(0.96, (0.46 + (level - 1) * 0.019) * diff(d).camo);
   }
-  function peekEvery(level, d) { return (2.4 + (level - 1) * 0.13) * diff(d).tell; }
+  // 探头是唯一的破绽,必须稀有 —— 否则站着不动等它们自己蹦出来就行了,毫无挑战
+  function peekEvery(level, d) { return (5.5 + (level - 1) * 0.2) * diff(d).tell; }
   function maxMisses(level, d) { return diff(d).misses; }
   function hintCount(level, d) { return diff(d).hints; }
+
+  var PEEK_DUR = 0.32;                 // 每次探头露馅的时长(秒)
 
   function rng(seed) {
     var s = seed >>> 0 || 1;
@@ -230,10 +233,12 @@ var Core = (function () {
         var d = st.scene.imps[i];
         if (d.found) continue;
         if (st.elapsed >= d.peekAt && !d.peeked) {
+          // 同一时刻只允许一只探头,否则一眼扫过去能同时抓到好几只
+          if (someonePeeking(st, d)) { d.peekAt = st.elapsed + 0.35 + Math.random() * 0.8; continue; }
           d.peeked = true; events.peeked = true;
           d.pose = POSES[(Math.random() * POSES.length) | 0];   // 每次探头换个姿势
         }
-        if (st.elapsed >= d.peekAt + 0.42) {
+        if (st.elapsed >= d.peekAt + PEEK_DUR) {
           d.peekAt = st.elapsed + period + Math.random() * period * 0.6;
           d.peeked = false;
         }
@@ -252,7 +257,16 @@ var Core = (function () {
     return events;
   }
 
-  var PEEK_DUR = 0.42;
+  function someonePeeking(st, except) {
+    for (var i = 0; i < st.scene.imps.length; i++) {
+      var o = st.scene.imps[i];
+      if (o === except || o.found) continue;
+      var since = st.elapsed - o.peekAt;
+      if (since >= 0 && since < PEEK_DUR) return true;
+    }
+    return false;
+  }
+
   function isPeeking(st, d) {
     if (d.found) return false;
     var since = st.elapsed - d.peekAt;
