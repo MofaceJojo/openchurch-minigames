@@ -393,19 +393,22 @@ var Render = (function () {
 
     if (!isImp) return;
 
-    // ---- 破绽①:顶上两只小角(camo 越高越小) ----
-    var hn = 1 + (1 - camo) * 3.4;
-    ctx.fillStyle = rgb(sh(col, -56));
-    ctx.beginPath();
-    ctx.moveTo(X(x + 3.5) * s, Y(y + 1.5) * s);
-    ctx.lineTo(X(x + 5.2) * s, Y(y + 1.5 - hn) * s);
-    ctx.lineTo(X(x + 6.4) * s, Y(y + 1.5) * s);
-    ctx.closePath(); ctx.fill();
-    ctx.beginPath();
-    ctx.moveTo(X(x + W - 6.4) * s, Y(y + 1.5) * s);
-    ctx.lineTo(X(x + W - 5.2) * s, Y(y + 1.5 - hn) * s);
-    ctx.lineTo(X(x + W - 3.5) * s, Y(y + 1.5) * s);
-    ctx.closePath(); ctx.fill();
+    // ---- 破绽:平时和真物件一模一样,只有探头那一下才冒出角、眼睛和小手 ----
+    // (角如果常驻,不用找就能一眼扫出来,伪装就没意义了)
+    if (peek) {
+      var hn = 2.4 + (1 - camo) * 2.6;
+      ctx.fillStyle = rgb(sh(col, -56));
+      ctx.beginPath();
+      ctx.moveTo(X(x + 3.5) * s, Y(y + 1.5) * s);
+      ctx.lineTo(X(x + 5.2) * s, Y(y + 1.5 - hn) * s);
+      ctx.lineTo(X(x + 6.4) * s, Y(y + 1.5) * s);
+      ctx.closePath(); ctx.fill();
+      ctx.beginPath();
+      ctx.moveTo(X(x + W - 6.4) * s, Y(y + 1.5) * s);
+      ctx.lineTo(X(x + W - 5.2) * s, Y(y + 1.5 - hn) * s);
+      ctx.lineTo(X(x + W - 3.5) * s, Y(y + 1.5) * s);
+      ctx.closePath(); ctx.fill();
+    }
 
     // ---- 破绽②:探头 —— 睁眼吐舌,最可靠的识别信号 ----
     if (peek) {
@@ -642,7 +645,6 @@ var Render = (function () {
       ctx.restore();
     }
 
-    if (st.mode === "play") drawPanArrows(ctx, C, st, s, t);
     drawHud(ctx, C, st, s);
     if (st.mode === "play") drawHintBtn(ctx, C, st, s, t);
 
@@ -651,7 +653,6 @@ var Render = (function () {
         "Imps disguise themselves as everyday things —",
         "mugs, jars, books, little plants.",
         "Look for tiny horns, or catch one dancing!",
-        "Drag left and right — the room is wider than the screen.",
         USE_HINT + "."
       ], "Tap to play · Level " + st.level, 84);
       drawDiffPicker(ctx, C, st, s);

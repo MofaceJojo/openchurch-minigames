@@ -35,9 +35,9 @@ box-shadow: 0 10px 34px rgba(60,100,120,.28);
 <a id="back" class="chip" href="../">← All games</a>
 <button id="sound" class="chip">🔊 Sound</button>
 <canvas id="cv"></canvas>
-<script src="audio.js?v=15"></script>
-<script src="core.js?v=15"></script>
-<script src="render.js?v=15"></script>
+<script src="audio.js?v=16"></script>
+<script src="core.js?v=16"></script>
+<script src="render.js?v=16"></script>
 <script>
 "use strict";
 const cv = document.getElementById("cv"), ctx = cv.getContext("2d");
@@ -107,30 +107,14 @@ function toCanvasPx(e) {                    // 菜单命中判定用的画布内
   return { x: (e.clientX - r.left) * k, y: (e.clientY - r.top) * k };
 }
 
-/* 拖动 = 平移场景,轻点 = 开火。移动超过阈值就判定为拖动,不再开火。 */
-const DRAG_MIN = 5;
-let drag = null;
-
-cv.addEventListener("pointermove", e => {
-  cursor = toVirtual(e);
-  if (drag && st.mode === "play") {
-    const sx = screenX(e), dx = sx - drag.lastX;
-    if (Math.abs(sx - drag.startX) > DRAG_MIN) drag.moved = true;
-    if (drag.moved) { Core.panBy(st, -dx); cursor = toVirtual(e); }
-    drag.lastX = sx;
-  }
-});
-cv.addEventListener("pointerleave", () => { cursor = null; drag = null; });
-cv.addEventListener("pointercancel", () => { drag = null; });
-cv.addEventListener("pointerup", () => { drag = null; });
+cv.addEventListener("pointermove", e => { cursor = toVirtual(e); });
+cv.addEventListener("pointerleave", () => { cursor = null; });
 
 cv.addEventListener("pointerdown", e => {
   e.preventDefault();
   Sfx.init();                                     // 首次手势里初始化音频
   const v = toVirtual(e);
   cursor = v;
-  const sx0 = screenX(e);
-  drag = { startX: sx0, lastX: sx0, moved: false };
 
   if (st.mode === "menu") {
     const cp = toCanvasPx(e);
@@ -151,7 +135,6 @@ cv.addEventListener("pointerdown", e => {
       return;
     }
   }
-  if (drag && drag.moved) return;                 // 这次是拖动,不算开火
   const res = Core.shine(st, v.x, v.y);
   if (!res) return;
   if (res.hit) {
@@ -165,9 +148,6 @@ cv.addEventListener("pointerdown", e => {
 });
 
 addEventListener("keydown", e => {
-  if (st.mode === "play" && (e.key === "ArrowLeft" || e.key === "ArrowRight")) {
-    e.preventDefault(); Core.panBy(st, e.key === "ArrowLeft" ? -26 : 26); return;
-  }
   if (e.key === " " || e.key === "Enter") {
     e.preventDefault();
     Sfx.init();

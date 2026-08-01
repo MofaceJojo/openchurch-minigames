@@ -6,7 +6,7 @@
 
 var Core = (function () {
   var W = 240, H = 360;              // W = 可视宽度
-  var SCENE_W = 560;                 // 场景实际宽度,左右拖动查看
+  var SCENE_W = 240;                 // 场景宽度 = 可视宽度,不做横向滚动
   var MAX_LEVEL = 30;
   var OBJ_W = 21, OBJ_H = 23;          // 物件(也是小鬼)的统一尺寸,放大以容纳细节
 
