@@ -5,7 +5,8 @@
 "use strict";
 
 var Core = (function () {
-  var W = 240, H = 360;
+  var W = 240, H = 360;              // W = 可视宽度
+  var SCENE_W = 560;                 // 场景实际宽度,左右拖动查看
   var MAX_LEVEL = 30;
   var OBJ_W = 21, OBJ_H = 23;          // 物件(也是小鬼)的统一尺寸,放大以容纳细节
 
@@ -17,6 +18,8 @@ var Core = (function () {
     brave:  { id: "brave",  name: "Brave",  blurb: "Sharp eyes only",
               time: 0.8, camo: 1.3, tell: 1.6,  misses: 3, hints: 1, decoy: 1.35 }
   };
+  // 探头时随机摆一个搞笑姿势 —— 既是破绽,也是这游戏最好笑的地方
+  var POSES = ["wave", "dance", "stretch", "spin", "hips", "faint"];
   var DIFF_IDS = ["gentle", "normal", "brave"];
   function diff(d) { return DIFFS[d] || DIFFS.normal; }
 
@@ -62,33 +65,45 @@ var Core = (function () {
     // 每种场景的背景陈设(纯装饰,不藏小鬼)。都是明亮的日常室内。
     if (scene.id === "kitchen") {
       sc.window = { x: 150, y: 34, w: 74, h: 62 };              // 洒进阳光的窗
-      sc.shelves = [{ y: 132, x: 8, w: W - 16 }, { y: 214, x: 8, w: W - 16 }];
+      sc.window2 = { x: 400, y: 34, w: 74, h: 62 };
+      sc.shelves = [{ y: 132, x: 8, w: 140 }, { y: 214, x: 8, w: SCENE_W - 16 }];
       sc.counter = { y: 292 };
       sc.tiles = true;
-      sc.surfaces = [{ y: 132, x0: 10, x1: 142 }, { y: 214, x0: 10, x1: W - 12 },
-                     { y: 292, x0: 6, x1: W - 8 }, { y: 336, x0: 6, x1: W - 8 }];
+      sc.surfaces = [{ y: 132, x0: 10, x1: 142 }, { y: 214, x0: 10, x1: SCENE_W - 12 },
+                     { y: 292, x0: 6, x1: SCENE_W - 8 }, { y: 336, x0: 6, x1: SCENE_W - 8 }];
     } else if (scene.id === "living") {
       sc.window = { x: 18, y: 30, w: 78, h: 66 };
-      sc.sofa = { x: 12, y: 246, w: W - 24, h: 62 };
-      sc.shelves = [{ y: 140, x: 116, w: 116 }];
+      sc.sofa = { x: 12, y: 246, w: SCENE_W - 24, h: 62 };
+      sc.shelves = [{ y: 140, x: 116, w: SCENE_W - 128 }];
       sc.rug = { y: 322 };
       sc.lamp = { x: 24, y: 178 };
-      sc.surfaces = [{ y: 140, x0: 118, x1: W - 12 }, { y: 250, x0: 16, x1: W - 18 },
-                     { y: 322, x0: 6, x1: W - 8 }, { y: 352, x0: 6, x1: W - 8 }];
+      sc.window2 = { x: 330, y: 30, w: 78, h: 66 };
+      sc.cushions = [];                                          // 靠垫沿整张沙发铺开
+      for (i = 0; i < 10; i++) sc.cushions.push({ x: 18 + i * 54, w: 44 });
+      sc.pictures = [];                                          // 墙上挂几幅画
+      for (i = 0; i < 3; i++) sc.pictures.push({ x: 150 + i * 130, y: 60 + (R() * 24 | 0) });
+      sc.surfaces = [{ y: 140, x0: 118, x1: SCENE_W - 12 }, { y: 250, x0: 16, x1: SCENE_W - 18 },
+                     { y: 322, x0: 6, x1: SCENE_W - 8 }, { y: 352, x0: 6, x1: SCENE_W - 8 }];
     } else if (scene.id === "shed") {
       sc.window = { x: 96, y: 28, w: 62, h: 52 };
-      sc.pegboard = { x: 8, y: 104, w: W - 16, h: 74 };
-      sc.shelves = [{ y: 198, x: 6, w: W - 12 }];
+      sc.pegboard = { x: 8, y: 104, w: 92, h: 74 };
+      sc.pegboards = [{ x: 8, y: 104, w: 92, h: 74 },
+                      { x: 190, y: 104, w: 92, h: 74 },
+                      { x: 372, y: 104, w: 92, h: 74 }];
+      sc.window2 = { x: 300, y: 28, w: 62, h: 52 };
+      sc.shelves = [{ y: 198, x: 6, w: SCENE_W - 12 }];
       sc.bench = { y: 282 };
-      sc.surfaces = [{ y: 104, x0: 10, x1: 90 }, { y: 198, x0: 8, x1: W - 10 },
-                     { y: 282, x0: 6, x1: W - 8 }, { y: 334, x0: 6, x1: W - 8 }];
+      sc.surfaces = [{ y: 104, x0: 10, x1: 90 }, { y: 198, x0: 8, x1: SCENE_W - 10 },
+                     { y: 282, x0: 6, x1: SCENE_W - 8 }, { y: 334, x0: 6, x1: SCENE_W - 8 }];
     } else {                                                     // study
       sc.window = { x: 20, y: 26, w: 68, h: 58 };
       sc.pinboard = { x: 106, y: 96, w: 126, h: 82 };
-      sc.shelves = [{ y: 196, x: 6, w: W - 12 }];
+      sc.pinboards = [{ x: 106, y: 96, w: 126, h: 82 }, { x: 320, y: 92, w: 126, h: 82 }];
+      sc.window2 = { x: 470, y: 26, w: 68, h: 58 };
+      sc.shelves = [{ y: 196, x: 6, w: SCENE_W - 12 }];
       sc.desk = { y: 274 };
-      sc.surfaces = [{ y: 96, x0: 12, x1: 96 }, { y: 196, x0: 8, x1: W - 10 },
-                     { y: 274, x0: 6, x1: W - 8 }, { y: 330, x0: 6, x1: W - 8 }];
+      sc.surfaces = [{ y: 96, x0: 12, x1: 96 }, { y: 196, x0: 8, x1: SCENE_W - 10 },
+                     { y: 274, x0: 6, x1: SCENE_W - 8 }, { y: 330, x0: 6, x1: SCENE_W - 8 }];
     }
     for (i = 0; i < 4; i++)                                      // 窗外飘过的云
       sc.clouds.push({ x: (R() * W) | 0, y: 10 + (R() * 40 | 0), w: 16 + (R() * 14 | 0), sp: 0.2 + R() * 0.4 });
@@ -101,8 +116,9 @@ var Core = (function () {
       var surf = sc.surfaces[(R() * sc.surfaces.length) | 0];
       var px2 = surf.x0 + (R() * Math.max(1, surf.x1 - surf.x0 - OBJ_W) | 0);
       var p = { x: px2, y: surf.y - OBJ_H };
-      // 右下角是提示按钮,物件不能压在它下面 —— 否则点它只会触发提示,永远打不中
-      if (p.x + OBJ_W > W - 42 && p.y + OBJ_H > H - 42) continue;
+      // 提示按钮固定在屏幕右下角。场景可横向滚动,只需保证物件不落在
+      // 最底那条平面的最右端(那里无论怎么滚都可能被按钮压住)
+      if (p.y + OBJ_H > H - 42 && p.x + OBJ_W > SCENE_W - 46) continue;
       var ok = true;
       for (i = 0; i < slots.length; i++)
         if (Math.abs(slots[i].y - p.y) < 4 && Math.abs(slots[i].x - p.x) < OBJ_W + 3) { ok = false; break; }
@@ -134,6 +150,7 @@ var Core = (function () {
     st.hintRing = null;
     st.time = timeLimit(level, st.diff);
     st.elapsed = 0;
+    st.camX = 0; st.camTarget = null;
     st.flash = null;
     st.mode = "intro";
   }
@@ -152,6 +169,17 @@ var Core = (function () {
     newLevel(st, st.level);
     st.mode = "menu";
     return true;
+  }
+
+  var MAX_CAM = SCENE_W - W;
+  function clampCam(x) { return Math.max(0, Math.min(MAX_CAM, x)); }
+  function panBy(st, dx) { st.camX = clampCam(st.camX + dx); st.camTarget = null; }
+  function panTo(st, worldX) { st.camTarget = clampCam(worldX - W / 2); }
+  function tickCam(st, dt) {
+    if (st.camTarget === null || st.camTarget === undefined) return;
+    var d = st.camTarget - st.camX;
+    if (Math.abs(d) < 0.6) { st.camX = st.camTarget; st.camTarget = null; return; }
+    st.camX = clampCam(st.camX + d * Math.min(1, dt * 6));
   }
 
   function hitBox(o, vx, vy) {
@@ -187,6 +215,7 @@ var Core = (function () {
     var pick = pool[(Math.random() * pool.length) | 0];
     st.hints--;
     st.hintRing = { x: pick.x + OBJ_W / 2, y: pick.y + OBJ_H / 2, t: 0 };
+    panTo(st, st.hintRing.x);                 // 镜头自动摇到那一片
     return { at: st.hintRing };
   }
 
@@ -200,7 +229,10 @@ var Core = (function () {
       for (i = 0; i < st.scene.imps.length; i++) {
         var d = st.scene.imps[i];
         if (d.found) continue;
-        if (st.elapsed >= d.peekAt && !d.peeked) { d.peeked = true; events.peeked = true; }
+        if (st.elapsed >= d.peekAt && !d.peeked) {
+          d.peeked = true; events.peeked = true;
+          d.pose = POSES[(Math.random() * POSES.length) | 0];   // 每次探头换个姿势
+        }
         if (st.elapsed >= d.peekAt + 0.42) {
           d.peekAt = st.elapsed + period + Math.random() * period * 0.6;
           d.peeked = false;
@@ -211,6 +243,7 @@ var Core = (function () {
       if (st.scene.imps[i].found) st.scene.imps[i].freeing += dt;
     if (st.flash) { st.flash.t += dt; if (st.flash.t > 0.6) st.flash = null; }
     if (st.hintRing) { st.hintRing.t += dt; if (st.hintRing.t > 2.2) st.hintRing = null; }
+    tickCam(st, dt);
     for (i = 0; i < st.scene.clouds.length; i++) {
       var c = st.scene.clouds[i];
       c.x += c.sp * dt * 4;
@@ -219,10 +252,12 @@ var Core = (function () {
     return events;
   }
 
+  var PEEK_DUR = 0.42;
   function isPeeking(st, d) {
     if (d.found) return false;
     var since = st.elapsed - d.peekAt;
-    return since >= 0 && since < 0.42;
+    if (since >= 0 && since < PEEK_DUR) { d.poseT = since / PEEK_DUR; return true; }
+    return false;
   }
 
   function advance(st) {
@@ -235,7 +270,9 @@ var Core = (function () {
   }
 
   return {
-    W: W, H: H, MAX_LEVEL: MAX_LEVEL, OBJ_W: OBJ_W, OBJ_H: OBJ_H,
+    W: W, H: H, SCENE_W: SCENE_W, MAX_CAM: MAX_CAM, MAX_LEVEL: MAX_LEVEL,
+    OBJ_W: OBJ_W, OBJ_H: OBJ_H, POSES: POSES,
+    panBy: panBy, panTo: panTo, tickCam: tickCam,
     SCENES: SCENES, sceneFor: sceneFor,
     DIFFS: DIFFS, DIFF_IDS: DIFF_IDS, setDifficulty: setDifficulty,
     impCount: impCount, decoyCount: decoyCount, timeLimit: timeLimit,

@@ -10,6 +10,8 @@ var Render = (function () {
   function canvasSize(C, s) { return { w: C.W * s, h: (C.H + HUD) * s }; }
 
   function Y(y) { return HUD + y; }                       // 场景 y → 画布 y
+  var CAM = 0;                                            // 当前镜头横向偏移
+  function X(x) { return x - CAM; }                       // 世界 x → 画布 x
 
   function rgb(c) { return "rgb(" + c[0] + "," + c[1] + "," + c[2] + ")"; }
   function sh(c, d) {
@@ -19,32 +21,32 @@ var Render = (function () {
   }
   function box(ctx, s, x, y, w, h, col) {                 // 场景矩形
     ctx.fillStyle = typeof col === "string" ? col : rgb(col);
-    ctx.fillRect(x * s, Y(y) * s, w * s, h * s);
+    ctx.fillRect(X(x) * s, Y(y) * s, w * s, h * s);
   }
   function rnd(ctx, s, x, y, w, h, r, col) {              // 场景圆角矩形
-    var X = x * s, Yy = Y(y) * s, W = w * s, H = h * s, R = Math.min(r * s, W / 2, H / 2);
+    var Xx = X(x) * s, Yy = Y(y) * s, W = w * s, H = h * s, R = Math.min(r * s, W / 2, H / 2);
     ctx.beginPath();
-    ctx.moveTo(X + R, Yy);
-    ctx.arcTo(X + W, Yy, X + W, Yy + H, R); ctx.arcTo(X + W, Yy + H, X, Yy + H, R);
-    ctx.arcTo(X, Yy + H, X, Yy, R); ctx.arcTo(X, Yy, X + W, Yy, R);
+    ctx.moveTo(Xx + R, Yy);
+    ctx.arcTo(Xx + W, Yy, Xx + W, Yy + H, R); ctx.arcTo(Xx + W, Yy + H, Xx, Yy + H, R);
+    ctx.arcTo(Xx, Yy + H, Xx, Yy, R); ctx.arcTo(Xx, Yy, Xx + W, Yy, R);
     ctx.closePath();
     ctx.fillStyle = typeof col === "string" ? col : rgb(col); ctx.fill();
   }
   function ell(ctx, s, cx, cy, rx, ry, col) {
-    ctx.beginPath(); ctx.ellipse(cx * s, Y(cy) * s, rx * s, ry * s, 0, 0, Math.PI * 2);
+    ctx.beginPath(); ctx.ellipse(X(cx) * s, Y(cy) * s, rx * s, ry * s, 0, 0, Math.PI * 2);
     ctx.fillStyle = typeof col === "string" ? col : rgb(col); ctx.fill();
   }
   function vgrad(ctx, s, x, y, w, h, top, bot) {          // 竖向渐变,用来做圆柱体的受光
-    var g = ctx.createLinearGradient(x * s, 0, (x + w) * s, 0);
+    var g = ctx.createLinearGradient(X(x) * s, 0, X(x + w) * s, 0);
     g.addColorStop(0, rgb(sh(top, -14))); g.addColorStop(0.34, rgb(sh(top, 16)));
     g.addColorStop(0.68, rgb(top)); g.addColorStop(1, rgb(bot));
-    ctx.fillStyle = g; ctx.fillRect(x * s, Y(y) * s, w * s, h * s);
+    ctx.fillStyle = g; ctx.fillRect(X(x) * s, Y(y) * s, w * s, h * s);
   }
   function shadow(ctx, s, x, y, w) {                      // 物件底部的柔和落影
-    var g = ctx.createRadialGradient((x + w / 2) * s, Y(y) * s, 0, (x + w / 2) * s, Y(y) * s, w * 0.62 * s);
+    var g = ctx.createRadialGradient(X(x + w / 2) * s, Y(y) * s, 0, X(x + w / 2) * s, Y(y) * s, w * 0.62 * s);
     g.addColorStop(0, "rgba(70,55,40,.26)"); g.addColorStop(1, "rgba(70,55,40,0)");
     ctx.fillStyle = g;
-    ctx.beginPath(); ctx.ellipse((x + w / 2) * s, Y(y) * s, w * 0.62 * s, w * 0.2 * s, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.ellipse(X(x + w / 2) * s, Y(y) * s, w * 0.62 * s, w * 0.2 * s, 0, 0, Math.PI * 2); ctx.fill();
   }
   function text(ctx, str, x, y, size, color, align, bold) {
     ctx.fillStyle = color;
@@ -65,7 +67,7 @@ var Render = (function () {
     box(ctx, s, w.x - 3, w.y - 3, w.w + 6, w.h + 6, [252, 250, 244]);   // 窗框
     var g = ctx.createLinearGradient(0, Y(w.y) * s, 0, Y(w.y + w.h) * s);
     g.addColorStop(0, "#a8dcf6"); g.addColorStop(1, "#dff2fb");
-    ctx.fillStyle = g; ctx.fillRect(w.x * s, Y(w.y) * s, w.w * s, w.h * s);
+    ctx.fillStyle = g; ctx.fillRect(X(w.x) * s, Y(w.y) * s, w.w * s, w.h * s);
     for (var i = 0; i < sc.clouds.length; i++) {                        // 窗外的云
       var c = sc.clouds[i];
       var cx = w.x + 6 + (c.x % (w.w - 16)), cy = w.y + 8 + (c.y % (w.h - 20));
@@ -74,10 +76,10 @@ var Render = (function () {
     }
     box(ctx, s, w.x + w.w / 2 - 1.5, w.y, 3, w.h, [252, 250, 244]);      // 窗棂
     box(ctx, s, w.x, w.y + w.h / 2 - 1.5, w.w, 3, [252, 250, 244]);
-    var sg = ctx.createLinearGradient(w.x * s, Y(w.y) * s, (w.x + w.w * 1.6) * s, Y(w.y + w.h * 2.2) * s);
+    var sg = ctx.createLinearGradient(X(w.x) * s, Y(w.y) * s, X(w.x + w.w * 1.6) * s, Y(w.y + w.h * 2.2) * s);
     sg.addColorStop(0, "rgba(255,246,200,.34)"); sg.addColorStop(1, "rgba(255,246,200,0)");
     ctx.fillStyle = sg;                                                 // 洒进来的阳光
-    ctx.fillRect(w.x * s, Y(w.y) * s, w.w * 1.8 * s, w.h * 2.4 * s);
+    ctx.fillRect(X(w.x) * s, Y(w.y) * s, w.w * 1.8 * s, w.h * 2.4 * s);
     box(ctx, s, w.x - 5, w.y + w.h + 3, w.w + 10, 4, [238, 232, 220]);   // 窗台
   }
 
@@ -86,11 +88,11 @@ var Render = (function () {
     box(ctx, s, x, y, w, 2, [216, 180, 134]);
     box(ctx, s, x, y + 5, w, 3, [150, 116, 78]);
     ctx.fillStyle = "rgba(90,70,50,.10)";
-    ctx.fillRect(x * s, Y(y + 8) * s, w * s, 9 * s);
+    ctx.fillRect(X(x) * s, Y(y + 8) * s, w * s, 9 * s);
   }
 
   function drawScene(ctx, C, st, s, t) {
-    var sc = st.scene, i, W = C.W, H = C.H;
+    var sc = st.scene, i, W = C.SCENE_W, H = C.H;
 
     if (sc.id === "kitchen") {
       box(ctx, s, 0, 0, W, H, [246, 238, 224]);
@@ -100,6 +102,7 @@ var Render = (function () {
       }
       box(ctx, s, 0, 128, W, 4, [214, 222, 220]);
       drawWindow(ctx, C, sc, s, t);
+      if (sc.window2) drawWindow(ctx, C, { window: sc.window2, clouds: sc.clouds }, s, t);
       box(ctx, s, 0, sc.counter.y, W, H - sc.counter.y, [186, 146, 102]); // 木台面
       box(ctx, s, 0, sc.counter.y, W, 5, [212, 174, 128]);
       for (i = 0; i < W; i += 7) box(ctx, s, i, sc.counter.y + 6, 2, H, [176, 136, 94]);
@@ -109,18 +112,26 @@ var Render = (function () {
       box(ctx, s, 0, 0, W, H, [244, 234, 222]);
       for (i = 0; i < W; i += 26) box(ctx, s, i, 0, 1, 300, [236, 224, 210]); // 淡竖条壁纸
       drawWindow(ctx, C, sc, s, t);
+      if (sc.window2) drawWindow(ctx, C, { window: sc.window2, clouds: sc.clouds }, s, t);
+      for (i = 0; sc.pictures && i < sc.pictures.length; i++) {          // 墙上的画
+        var pic = sc.pictures[i];
+        box(ctx, s, pic.x, pic.y, 34, 26, [176, 140, 96]);
+        box(ctx, s, pic.x + 3, pic.y + 3, 28, 20, [246, 242, 232]);
+        ell(ctx, s, pic.x + 12, pic.y + 13, 7, 5, "#a8cbb0");
+        ell(ctx, s, pic.x + 24, pic.y + 10, 4, 4, "#f3d485");
+      }
       for (i = 0; i < sc.shelves.length; i++) shelfBoard(ctx, s, sc.shelves[i].x, sc.shelves[i].y, sc.shelves[i].w);
       box(ctx, s, sc.lamp.x - 2, sc.lamp.y + 16, 4, 46, [150, 130, 108]);      // 落地灯
       ctx.beginPath();
-      ctx.moveTo((sc.lamp.x - 14) * s, Y(sc.lamp.y + 16) * s);
-      ctx.lineTo((sc.lamp.x + 14) * s, Y(sc.lamp.y + 16) * s);
-      ctx.lineTo((sc.lamp.x + 9) * s, Y(sc.lamp.y - 2) * s);
-      ctx.lineTo((sc.lamp.x - 9) * s, Y(sc.lamp.y - 2) * s);
+      ctx.moveTo(X(sc.lamp.x - 14) * s, Y(sc.lamp.y + 16) * s);
+      ctx.lineTo(X(sc.lamp.x + 14) * s, Y(sc.lamp.y + 16) * s);
+      ctx.lineTo(X(sc.lamp.x + 9) * s, Y(sc.lamp.y - 2) * s);
+      ctx.lineTo(X(sc.lamp.x - 9) * s, Y(sc.lamp.y - 2) * s);
       ctx.closePath(); ctx.fillStyle = "#f3d79a"; ctx.fill();
       rnd(ctx, s, sc.sofa.x, sc.sofa.y, sc.sofa.w, sc.sofa.h, 9, [176, 152, 190]); // 沙发
       rnd(ctx, s, sc.sofa.x + 4, sc.sofa.y + 4, sc.sofa.w - 8, 22, 7, [196, 174, 208]);
-      rnd(ctx, s, sc.sofa.x + 6, sc.sofa.y + 28, 44, 20, 6, [206, 186, 216]);
-      rnd(ctx, s, sc.sofa.x + 58, sc.sofa.y + 28, 44, 20, 6, [206, 186, 216]);
+      for (i = 0; sc.cushions && i < sc.cushions.length; i++)
+        rnd(ctx, s, sc.cushions[i].x, sc.sofa.y + 28, sc.cushions[i].w, 20, 6, [206, 186, 216]);
       box(ctx, s, 0, sc.rug.y, W, H - sc.rug.y, [214, 178, 156]);              // 地毯
       for (i = 0; i < W; i += 16) box(ctx, s, i, sc.rug.y + 5, 8, 2, [226, 196, 176]);
 
@@ -128,14 +139,19 @@ var Render = (function () {
       box(ctx, s, 0, 0, W, H, [226, 210, 186]);
       for (i = 0; i < H; i += 17) box(ctx, s, 0, i, W, 2, [212, 194, 168]);   // 木板墙
       drawWindow(ctx, C, sc, s, t);
-      box(ctx, s, sc.pegboard.x, sc.pegboard.y, sc.pegboard.w, sc.pegboard.h, [206, 176, 132]);
-      for (i = 6; i < sc.pegboard.w; i += 10)                                  // 洞洞板
-        for (var k = 6; k < sc.pegboard.h; k += 10)
-          ell(ctx, s, sc.pegboard.x + i, sc.pegboard.y + k, 1.2, 1.2, "rgba(120,94,60,.5)");
-      box(ctx, s, sc.pegboard.x + 22, sc.pegboard.y + 12, 3, 30, [138, 142, 150]);  // 挂着的工具
-      ell(ctx, s, sc.pegboard.x + 23, sc.pegboard.y + 46, 8, 5, [138, 142, 150]);
-      box(ctx, s, sc.pegboard.x + 74, sc.pegboard.y + 10, 4, 36, [150, 110, 70]);
-      box(ctx, s, sc.pegboard.x + 66, sc.pegboard.y + 44, 20, 7, [138, 142, 150]);
+      if (sc.window2) drawWindow(ctx, C, { window: sc.window2, clouds: sc.clouds }, s, t);
+      var pbs = sc.pegboards || [sc.pegboard];
+      for (var pi = 0; pi < pbs.length; pi++) {
+        var pb = pbs[pi];
+        box(ctx, s, pb.x, pb.y, pb.w, pb.h, [206, 176, 132]);
+        for (i = 6; i < pb.w; i += 10)                                          // 洞洞板
+          for (var k = 6; k < pb.h; k += 10)
+            ell(ctx, s, pb.x + i, pb.y + k, 1.2, 1.2, "rgba(120,94,60,.5)");
+        box(ctx, s, pb.x + 22, pb.y + 12, 3, 30, [138, 142, 150]);              // 挂着的工具
+        ell(ctx, s, pb.x + 23, pb.y + 46, 8, 5, [138, 142, 150]);
+        box(ctx, s, pb.x + 74, pb.y + 10, 4, 36, [150, 110, 70]);
+        box(ctx, s, pb.x + 66, pb.y + 44, 20, 7, [138, 142, 150]);
+      }
       for (i = 0; i < sc.shelves.length; i++) shelfBoard(ctx, s, sc.shelves[i].x, sc.shelves[i].y, sc.shelves[i].w);
       box(ctx, s, 0, sc.bench.y, W, H - sc.bench.y, [176, 140, 96]);           // 工作台
       box(ctx, s, 0, sc.bench.y, W, 5, [200, 164, 118]);
@@ -143,13 +159,18 @@ var Render = (function () {
     } else {
       box(ctx, s, 0, 0, W, H, [238, 232, 220]);
       drawWindow(ctx, C, sc, s, t);
-      box(ctx, s, sc.pinboard.x, sc.pinboard.y, sc.pinboard.w, sc.pinboard.h, [214, 178, 126]);
-      box(ctx, s, sc.pinboard.x, sc.pinboard.y, sc.pinboard.w, 4, [230, 198, 150]);
+      if (sc.window2) drawWindow(ctx, C, { window: sc.window2, clouds: sc.clouds }, s, t);
+      var pnbs = sc.pinboards || [sc.pinboard];
       var notes = [[10, 12, 26, 22, "#fdf3a8"], [46, 8, 24, 30, "#c8e8f8"], [80, 16, 30, 20, "#ffd9d0"]];
-      for (i = 0; i < notes.length; i++) {                                     // 钉着的便签
-        var n = notes[i];
-        box(ctx, s, sc.pinboard.x + n[0], sc.pinboard.y + n[1], n[2], n[3], n[4]);
-        ell(ctx, s, sc.pinboard.x + n[0] + n[2] / 2, sc.pinboard.y + n[1] + 3, 2, 2, "#e0604a");
+      for (var qi = 0; qi < pnbs.length; qi++) {
+        var pn = pnbs[qi];
+        box(ctx, s, pn.x, pn.y, pn.w, pn.h, [214, 178, 126]);
+        box(ctx, s, pn.x, pn.y, pn.w, 4, [230, 198, 150]);
+        for (i = 0; i < notes.length; i++) {                                   // 钉着的便签
+          var n = notes[i];
+          box(ctx, s, pn.x + n[0], pn.y + n[1], n[2], n[3], n[4]);
+          ell(ctx, s, pn.x + n[0] + n[2] / 2, pn.y + n[1] + 3, 2, 2, "#e0604a");
+        }
       }
       for (i = 0; i < sc.shelves.length; i++) shelfBoard(ctx, s, sc.shelves[i].x, sc.shelves[i].y, sc.shelves[i].w);
       box(ctx, s, 0, sc.desk.y, W, H - sc.desk.y, [162, 118, 82]);             // 桌面
@@ -176,6 +197,40 @@ var Render = (function () {
   };
   function palOf(o) { var a = PAL[o.type] || PAL.jar; return a[Math.floor(o.tint * a.length) % a.length]; }
 
+
+  /* 探头时的搞笑姿势。ph = 0..1 走完整个探头过程 */
+  function poseXform(pose, ph) {
+    var sw = Math.sin(ph * Math.PI * 4), sw2 = Math.sin(ph * Math.PI * 2);
+    switch (pose) {
+      case "wave":    return { dx: 0, dy: -1.5, rot: sw * 0.10, sx: 1, sy: 1, arm: 1 };
+      case "dance":   return { dx: sw * 2.2, dy: -Math.abs(sw2) * 3.5, rot: sw * 0.16, sx: 1, sy: 1, arm: 2 };
+      case "stretch": return { dx: 0, dy: -Math.abs(sw2) * 4, rot: 0,
+                               sx: 1 - Math.abs(sw2) * 0.16, sy: 1 + Math.abs(sw2) * 0.24, arm: 3 };
+      case "spin":    return { dx: 0, dy: -1, rot: ph * Math.PI * 2, sx: 1, sy: 1, arm: 0 };
+      case "hips":    return { dx: sw * 3.2, dy: 0, rot: -sw * 0.20, sx: 1, sy: 1, arm: 2 };
+      case "faint":   return { dx: sw2 * 2, dy: 0, rot: ph * 1.15, sx: 1, sy: 1, arm: 4 };
+      default:        return { dx: 0, dy: 0, rot: 0, sx: 1, sy: 1, arm: 0 };
+    }
+  }
+  /* 姿势配套的小手 */
+  function drawArms(ctx, s, cx, y, W, H, arm, ph, col) {
+    if (!arm) return;
+    var skin = "#f7d9b0", up = Math.sin(ph * Math.PI * 6);
+    if (arm === 1) {                                   // 挥手
+      ell(ctx, s, cx + W * 0.52, y + H * 0.42 - 3 + up * 1.6, 2.2, 2.0, skin);
+      ell(ctx, s, cx - W * 0.5, y + H * 0.62, 2.0, 1.8, skin);
+    } else if (arm === 2) {                            // 双手叉腰/摆动
+      ell(ctx, s, cx - W * 0.54, y + H * 0.5 + up * 1.4, 2.1, 1.9, skin);
+      ell(ctx, s, cx + W * 0.54, y + H * 0.5 - up * 1.4, 2.1, 1.9, skin);
+    } else if (arm === 3) {                            // 高举伸懒腰
+      ell(ctx, s, cx - W * 0.34, y - 3, 2.0, 2.4, skin);
+      ell(ctx, s, cx + W * 0.34, y - 3, 2.0, 2.4, skin);
+    } else {                                           // 瘫软垂下
+      ell(ctx, s, cx - W * 0.5, y + H * 0.78, 2.2, 1.7, skin);
+      ell(ctx, s, cx + W * 0.5, y + H * 0.74, 2.2, 1.7, skin);
+    }
+  }
+
   /* 画一个物件。isImp 时加破绽:顶上两只小角(随关卡变小)+ 探头时露眼睛舌头 */
   function drawObject(ctx, C, s, o, isImp, peek, camo, t) {
     var W = C.OBJ_W, H = C.OBJ_H;
@@ -183,10 +238,23 @@ var Render = (function () {
     var off = isImp ? Math.round((1 - camo) * 16) : 0;     // 小鬼的轻微色差
     var col = sh(base, -off);
     var dark = sh(col, -34), light = sh(col, 26);
-    var x = o.x + ((isImp && peek) ? Math.sin(t * 20) * 0.8 : 0), y = o.y;
+    var x = o.x, y = o.y;
     var cx = x + W / 2;
 
     shadow(ctx, s, x, y + H - 1, W);
+
+    // 探头时:整个物件按抽到的姿势做动作(这既是破绽,也是最好笑的地方)
+    var posed = isImp && peek, PS = null, ph = 0;
+    if (posed) {
+      ph = Math.min(1, Math.max(0, o.poseT || 0));
+      PS = poseXform(o.pose || "wave", ph);
+      ctx.save();
+      ctx.translate(X(cx) * s, Y(y + H) * s);
+      ctx.rotate(PS.rot);
+      ctx.scale(PS.sx, PS.sy);
+      ctx.translate(-X(cx) * s, -Y(y + H) * s);
+      ctx.translate(PS.dx * s, PS.dy * s);
+    }
 
     if (o.type === "mug") {
       ell(ctx, s, x + W - 3, y + H * 0.55, 4.4, 4.4, dark);            // 手柄
@@ -216,9 +284,9 @@ var Render = (function () {
       ell(ctx, s, x + W * 0.5, y + H * 0.62, W * 0.44, H * 0.34, col);
       ell(ctx, s, x + W * 0.38, y + H * 0.5, W * 0.24, H * 0.16, light);
       ctx.beginPath();                                                 // 壶嘴
-      ctx.moveTo((x + 1) * s, Y(y + H * 0.52) * s);
-      ctx.lineTo((x - 2.5) * s, Y(y + H * 0.34) * s);
-      ctx.lineTo((x + 2) * s, Y(y + H * 0.38) * s);
+      ctx.moveTo(X(x + 1) * s, Y(y + H * 0.52) * s);
+      ctx.lineTo(X(x - 2.5) * s, Y(y + H * 0.34) * s);
+      ctx.lineTo(X(x + 2) * s, Y(y + H * 0.38) * s);
       ctx.closePath(); ctx.fillStyle = rgb(col); ctx.fill();
       ell(ctx, s, x + W - 2.5, y + H * 0.58, 4, 4.6, dark);
       ctx.save(); ctx.globalCompositeOperation = "destination-out";
@@ -228,7 +296,7 @@ var Render = (function () {
 
     } else if (o.type === "bowl") {
       ctx.beginPath();
-      ctx.ellipse(cx * s, Y(y + H * 0.52) * s, (W / 2 - 1) * s, (H * 0.34) * s, 0, 0, Math.PI);
+      ctx.ellipse(X(cx) * s, Y(y + H * 0.52) * s, (W / 2 - 1) * s, (H * 0.34) * s, 0, 0, Math.PI);
       ctx.fillStyle = rgb(col); ctx.fill();
       ell(ctx, s, cx, y + H * 0.52, W / 2 - 1, 3.4, light);
       ell(ctx, s, cx, y + H * 0.52, W / 2 - 3, 2.2, sh(col, -16));
@@ -237,7 +305,7 @@ var Render = (function () {
     } else if (o.type === "book") {
       var lean = (o.tint - 0.5) * 3;
       ctx.save();
-      ctx.translate(cx * s, Y(y + H) * s); ctx.rotate(lean * 0.04); ctx.translate(-cx * s, -Y(y + H) * s);
+      ctx.translate(X(cx) * s, Y(y + H) * s); ctx.rotate(lean * 0.04); ctx.translate(-X(cx) * s, -Y(y + H) * s);
       box(ctx, s, x + 3, y + 2, W - 8, H - 2, col);                    // 书身
       box(ctx, s, x + W - 5, y + 2, 3, H - 2, sh(col, -40));           // 书脊侧
       box(ctx, s, x + 3, y + 2, W - 8, 2.4, light);
@@ -249,9 +317,9 @@ var Render = (function () {
       box(ctx, s, x + 1, y + 3, W - 2, H - 6, col);
       box(ctx, s, x + 4, y + 6, W - 8, H - 12, [252, 248, 240]);
       ctx.beginPath();                                                  // 相片里的小山
-      ctx.moveTo((x + 4) * s, Y(y + H - 7) * s);
-      ctx.lineTo((x + W * 0.42) * s, Y(y + H * 0.42) * s);
-      ctx.lineTo((x + W - 4) * s, Y(y + H - 7) * s);
+      ctx.moveTo(X(x + 4) * s, Y(y + H - 7) * s);
+      ctx.lineTo(X(x + W * 0.42) * s, Y(y + H * 0.42) * s);
+      ctx.lineTo(X(x + W - 4) * s, Y(y + H - 7) * s);
       ctx.closePath(); ctx.fillStyle = "#9fc4a8"; ctx.fill();
       ell(ctx, s, x + W * 0.68, y + H * 0.34, 2.4, 2.4, "#f3d485");
       box(ctx, s, x + 1, y + 3, W - 2, 2, light);
@@ -263,10 +331,10 @@ var Render = (function () {
       ell(ctx, s, cx, y + 2.5, 4, 3.2, sh(g, -12));
       box(ctx, s, cx - 0.8, y + 5, 1.6, 6, sh(g, -30));
       ctx.beginPath();                                                  // 花盆(上宽下窄)
-      ctx.moveTo((x + 3) * s, Y(y + 11) * s);
-      ctx.lineTo((x + W - 3) * s, Y(y + 11) * s);
-      ctx.lineTo((x + W - 5) * s, Y(y + H - 1) * s);
-      ctx.lineTo((x + 5) * s, Y(y + H - 1) * s);
+      ctx.moveTo(X(x + 3) * s, Y(y + 11) * s);
+      ctx.lineTo(X(x + W - 3) * s, Y(y + 11) * s);
+      ctx.lineTo(X(x + W - 5) * s, Y(y + H - 1) * s);
+      ctx.lineTo(X(x + 5) * s, Y(y + H - 1) * s);
       ctx.closePath(); ctx.fillStyle = rgb(col); ctx.fill();
       box(ctx, s, x + 2, y + 10, W - 4, 3.4, light);
       box(ctx, s, x + 5.5, y + 15, 2, H - 18, "rgba(255,255,255,.35)");
@@ -281,10 +349,10 @@ var Render = (function () {
 
     } else if (o.type === "pot") {
       ctx.beginPath();
-      ctx.moveTo((x + 2) * s, Y(y + 6) * s);
-      ctx.lineTo((x + W - 2) * s, Y(y + 6) * s);
-      ctx.lineTo((x + W - 5) * s, Y(y + H - 1) * s);
-      ctx.lineTo((x + 5) * s, Y(y + H - 1) * s);
+      ctx.moveTo(X(x + 2) * s, Y(y + 6) * s);
+      ctx.lineTo(X(x + W - 2) * s, Y(y + 6) * s);
+      ctx.lineTo(X(x + W - 5) * s, Y(y + H - 1) * s);
+      ctx.lineTo(X(x + 5) * s, Y(y + H - 1) * s);
       ctx.closePath(); ctx.fillStyle = rgb(col); ctx.fill();
       box(ctx, s, x + 1, y + 4, W - 2, 4.4, light);
       box(ctx, s, x + 4.5, y + 10, 2.4, H - 13, "rgba(255,255,255,.34)");
@@ -301,14 +369,14 @@ var Render = (function () {
       rnd(ctx, s, x + 2, y + 7, W - 7, H - 8, 3, col);
       box(ctx, s, x + 4, y + 10, 2.2, H - 15, "rgba(255,255,255,.45)");
       ctx.beginPath();                                                  // 长壶嘴
-      ctx.moveTo((x + W - 5) * s, Y(y + 11) * s);
-      ctx.lineTo((x + W) * s, Y(y + 3) * s);
-      ctx.lineTo((x + W - 2) * s, Y(y + 2) * s);
-      ctx.lineTo((x + W - 7) * s, Y(y + 10) * s);
+      ctx.moveTo(X(x + W - 5) * s, Y(y + 11) * s);
+      ctx.lineTo(X(x + W) * s, Y(y + 3) * s);
+      ctx.lineTo(X(x + W - 2) * s, Y(y + 2) * s);
+      ctx.lineTo(X(x + W - 7) * s, Y(y + 10) * s);
       ctx.closePath(); ctx.fillStyle = rgb(sh(col, -18)); ctx.fill();
       ctx.strokeStyle = rgb(dark); ctx.lineWidth = 1.6 * s;             // 提手
       ctx.beginPath();
-      ctx.arc(cx * s - 2 * s, Y(y + 6) * s, 5 * s, Math.PI, 0);
+      ctx.arc(X(cx) * s - 2 * s, Y(y + 6) * s, 5 * s, Math.PI, 0);
       ctx.stroke();
 
     } else {                                                            // clock
@@ -316,8 +384,8 @@ var Render = (function () {
       ell(ctx, s, cx, y + H * 0.52, W / 2 - 3.4, W / 2 - 3.4, [252, 250, 244]);
       ctx.strokeStyle = "#4a4238"; ctx.lineWidth = 1.4 * s; ctx.lineCap = "round";
       ctx.beginPath();
-      ctx.moveTo(cx * s, Y(y + H * 0.52) * s); ctx.lineTo(cx * s, Y(y + H * 0.52 - 5) * s);
-      ctx.moveTo(cx * s, Y(y + H * 0.52) * s); ctx.lineTo((cx + 4) * s, Y(y + H * 0.52 + 1) * s);
+      ctx.moveTo(X(cx) * s, Y(y + H * 0.52) * s); ctx.lineTo(X(cx) * s, Y(y + H * 0.52 - 5) * s);
+      ctx.moveTo(X(cx) * s, Y(y + H * 0.52) * s); ctx.lineTo(X(cx + 4) * s, Y(y + H * 0.52 + 1) * s);
       ctx.stroke();
       ell(ctx, s, cx, y + H * 0.52, 1.2, 1.2, "#4a4238");
       box(ctx, s, cx - 2, y + 0.5, 4, 3, dark);
@@ -329,14 +397,14 @@ var Render = (function () {
     var hn = 1 + (1 - camo) * 3.4;
     ctx.fillStyle = rgb(sh(col, -56));
     ctx.beginPath();
-    ctx.moveTo((x + 3.5) * s, Y(y + 1.5) * s);
-    ctx.lineTo((x + 5.2) * s, Y(y + 1.5 - hn) * s);
-    ctx.lineTo((x + 6.4) * s, Y(y + 1.5) * s);
+    ctx.moveTo(X(x + 3.5) * s, Y(y + 1.5) * s);
+    ctx.lineTo(X(x + 5.2) * s, Y(y + 1.5 - hn) * s);
+    ctx.lineTo(X(x + 6.4) * s, Y(y + 1.5) * s);
     ctx.closePath(); ctx.fill();
     ctx.beginPath();
-    ctx.moveTo((x + W - 6.4) * s, Y(y + 1.5) * s);
-    ctx.lineTo((x + W - 5.2) * s, Y(y + 1.5 - hn) * s);
-    ctx.lineTo((x + W - 3.5) * s, Y(y + 1.5) * s);
+    ctx.moveTo(X(x + W - 6.4) * s, Y(y + 1.5) * s);
+    ctx.lineTo(X(x + W - 5.2) * s, Y(y + 1.5 - hn) * s);
+    ctx.lineTo(X(x + W - 3.5) * s, Y(y + 1.5) * s);
     ctx.closePath(); ctx.fill();
 
     // ---- 破绽②:探头 —— 睁眼吐舌,最可靠的识别信号 ----
@@ -349,7 +417,9 @@ var Render = (function () {
       ell(ctx, s, cx - 3.6, ey - 0.7, 0.6, 0.6, "#ffffff");
       ell(ctx, s, cx + 3.2, ey - 0.7, 0.6, 0.6, "#ffffff");
       rnd(ctx, s, cx - 1.8, ey + 3.2, 3.6, 3.4, 1.6, "#ff5f7a");
+      drawArms(ctx, s, cx, y, W, H, PS ? PS.arm : 0, ph, col);
     }
+    if (posed) ctx.restore();
   }
 
   /* 被点中:露真身 → 打着旋儿飞上天;底下的人蹦起来欢呼 */
@@ -361,7 +431,7 @@ var Render = (function () {
       var xx = d.x + W / 2 + Math.sin(p * 26) * 12 * (d.spin || 1);
       var sq = p < 0.12 ? 1 + (0.12 - p) * 5 : 1;
       ctx.save();
-      ctx.translate(xx * s, Y(yy) * s);
+      ctx.translate(X(xx) * s, Y(yy) * s);
       ctx.rotate(p * 14 * (d.spin || 1));
       ctx.scale(sq, 1 / sq);
       ctx.fillStyle = "#8a5fb0";
@@ -393,12 +463,12 @@ var Render = (function () {
       var bx = d.x + W / 2, by = d.y + H * 0.4 - hop;
       ell(ctx, s, bx, by, 4.4, 4.2, "#f7d9b0");                        // 头
       ctx.save(); ctx.beginPath();
-      ctx.ellipse(bx * s, Y(by - 1.2) * s, 4.4 * s, 3.4 * s, 0, Math.PI, 0);
+      ctx.ellipse(X(bx) * s, Y(by - 1.2) * s, 4.4 * s, 3.4 * s, 0, Math.PI, 0);
       ctx.fillStyle = "#7a4a2c"; ctx.fill(); ctx.restore();
       ell(ctx, s, bx - 1.5, by + 0.3, 0.6, 0.7, "#3d3226");
       ell(ctx, s, bx + 1.5, by + 0.3, 0.6, 0.7, "#3d3226");
       ctx.strokeStyle = "#c8624f"; ctx.lineWidth = 1 * s; ctx.lineCap = "round";
-      ctx.beginPath(); ctx.arc(bx * s, Y(by + 1.4) * s, 1.6 * s, 0.15 * Math.PI, 0.85 * Math.PI); ctx.stroke();
+      ctx.beginPath(); ctx.arc(X(bx) * s, Y(by + 1.4) * s, 1.6 * s, 0.15 * Math.PI, 0.85 * Math.PI); ctx.stroke();
       rnd(ctx, s, bx - 4, by + 4, 8, 8, 2.6, [120, 200, 240]);         // 身体
       ell(ctx, s, bx - 5.4, by + 4, 1.5, 2.2, "#f7d9b0");              // 举起的手
       ell(ctx, s, bx + 5.4, by + 4, 1.5, 2.2, "#f7d9b0");
@@ -412,6 +482,7 @@ var Render = (function () {
 
   /* ---------------- HUD / 遮罩 ---------------- */
   function drawHud(ctx, C, st, s) {
+    var _cam = CAM; CAM = 0;
     var w = C.W * s, hh = HUD * s;
     var g = ctx.createLinearGradient(0, 0, 0, hh);
     g.addColorStop(0, "#fffdf6"); g.addColorStop(1, "#f6ecd8");
@@ -428,6 +499,30 @@ var Render = (function () {
       ctx.fillStyle = i < left ? "#f2a33c" : "#e0d6c2";
       ctx.beginPath(); ctx.arc(w - 12 * s - i * 6 * s, hh * 0.75, 1.9 * s, 0, Math.PI * 2); ctx.fill();
     }
+    CAM = _cam;
+  }
+
+  /* 左右提示箭头:告诉玩家场景还能往那边拖 */
+  function drawPanArrows(ctx, C, st, s, t) {
+    var _c = CAM; CAM = 0;
+    var h = (C.H + HUD) * s, w = C.W * s, cy = HUD * s + (h - HUD * s) * 0.5;
+    var bob = Math.sin(t * 3) * 2 * s;
+    function arrow(cx, dir, on) {
+      if (!on) return;
+      ctx.save();
+      ctx.globalAlpha = 0.5 + 0.2 * Math.sin(t * 3);
+      ctx.fillStyle = "#fffdf4";
+      ctx.strokeStyle = "rgba(120,96,60,.5)"; ctx.lineWidth = 1.4 * s;
+      ctx.beginPath();
+      ctx.moveTo(cx + dir * (7 * s + bob * dir), cy);
+      ctx.lineTo(cx - dir * (4 * s - bob * dir), cy - 8 * s);
+      ctx.lineTo(cx - dir * (4 * s - bob * dir), cy + 8 * s);
+      ctx.closePath(); ctx.fill(); ctx.stroke();
+      ctx.restore();
+    }
+    arrow(13 * s, -1, st.camX > 2);
+    arrow(w - 13 * s, 1, st.camX < C.MAX_CAM - 2);
+    CAM = _c;
   }
 
   function hintBtn(C, s) { return { x: (C.W - 22) * s, y: Y(C.H - 22) * s, r: 13 * s }; }
@@ -436,6 +531,7 @@ var Render = (function () {
     return (cx - b.x) * (cx - b.x) + (cy - b.y) * (cy - b.y) <= b.r * b.r * 1.6;
   }
   function drawHintBtn(ctx, C, st, s, t) {
+    var _c = CAM; CAM = 0;
     var b = hintBtn(C, s), on = st.hints > 0, pulse = on ? 0.5 + 0.5 * Math.sin(t * 4) : 0;
     ctx.save();
     if (on) {
@@ -450,10 +546,11 @@ var Render = (function () {
     ctx.strokeStyle = on ? "#c98b2d" : "#a8a294"; ctx.lineWidth = 2 * s; ctx.stroke();
     text(ctx, "?", b.x, b.y - b.r * 0.12, b.r * 0.95, on ? "#6b4a08" : "#7e7a70", "center", true);
     text(ctx, String(st.hints), b.x, b.y + b.r * 0.55, b.r * 0.42, on ? "#8a6510" : "#8e8a80", "center", true);
-    ctx.restore();
+    ctx.restore(); CAM = _c;
   }
 
   function overlay(ctx, C, s, title, lines, hint, shiftUp) {
+    var _c = CAM; CAM = 0;
     var w = C.W * s, h = (C.H + HUD) * s;
     ctx.fillStyle = "rgba(38,32,24,.46)"; ctx.fillRect(0, 0, w, h);
     var pw = Math.min(w * 0.88, 340), ph = 156 + lines.length * 26;
@@ -467,6 +564,7 @@ var Render = (function () {
     for (var i = 0; i < lines.length; i++)
       text(ctx, lines[i], w / 2, y0 + 82 + i * 26, 14, "#6b6350");
     text(ctx, hint, w / 2, y0 + ph - 28, 15, "#3f8f5e", "center", true);
+    CAM = _c;
   }
 
   function diffGeom(C, s) {
@@ -500,6 +598,7 @@ var Render = (function () {
   /* ---------------- 主绘制 ---------------- */
   function draw(ctx, C, st, s, t, cursor) {
     var sc = st.scene, i;
+    CAM = st.camX || 0;
     var camo = C.camoStrength(st.level, st.diff);
     drawScene(ctx, C, st, s, t);
 
@@ -543,6 +642,7 @@ var Render = (function () {
       ctx.restore();
     }
 
+    if (st.mode === "play") drawPanArrows(ctx, C, st, s, t);
     drawHud(ctx, C, st, s);
     if (st.mode === "play") drawHintBtn(ctx, C, st, s, t);
 
@@ -550,7 +650,8 @@ var Render = (function () {
       overlay(ctx, C, s, "🔍 Peekaboo", [
         "Imps disguise themselves as everyday things —",
         "mugs, jars, books, little plants.",
-        "Look for tiny horns, or catch one peeking!",
+        "Look for tiny horns, or catch one dancing!",
+        "Drag left and right — the room is wider than the screen.",
         USE_HINT + "."
       ], "Tap to play · Level " + st.level, 84);
       drawDiffPicker(ctx, C, st, s);

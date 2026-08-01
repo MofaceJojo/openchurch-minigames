@@ -191,31 +191,36 @@ const LEVELS = [
   {
     id:1, name:"Village Green",
     bg:{ sky:"#c8e0f0", ground:"#88b868", ground2:"#78a858", buildings:["#c8b090","#b09878","#d8c0a0"], trees:["#5a9a4a","#4a8a3a"] },
-    innocents:3, deceivers:3, time:60, scans:2,
+    innocents:2, deceivers:2, time:75, scans:3,
+    treeCount:3, weather:"sunny",
     decorate:{ fences:true, well:true, bushes:true }
   },
   {
     id:2, name:"Market Street",
     bg:{ sky:"#d8e8f0", ground:"#b0a088", ground2:"#a09078", buildings:["#d0b898","#c0a888","#e0c8a8","#b09878"], trees:["#6a8a4a","#5a7a3a"] },
     innocents:4, deceivers:4, time:60, scans:2,
-    decorate:{ stalls:true, crates:true, lamps:true }
+    treeCount:2, weather:"cloudy",
+    decorate:{ stalls:true, crates:true, lamps:true, road:true }
   },
   {
     id:3, name:"Harvest Field",
     bg:{ sky:"#f0e8c8", ground:"#c8b050", ground2:"#b8a040", buildings:["#b0a080","#c0a860"], trees:["#7a9a4a","#6a8a3a"] },
     innocents:5, deceivers:5, time:55, scans:2,
+    treeCount:0, weather:"windy",
     decorate:{ haybales:true, windmill:true, fence:true }
   },
   {
     id:4, name:"Cathedral Square",
     bg:{ sky:"#d0d8e8", ground:"#b8b0a0", ground2:"#a8a090", buildings:["#c8b8a8","#b8a898","#d0c0b0","#a89888"], trees:["#5a7a4a","#4a6a3a"] },
     innocents:5, deceivers:6, time:50, scans:1,
+    treeCount:4, weather:"misty",
     decorate:{ fountain:true, pillars:true, benches:true }
   },
   {
     id:5, name:"The Deceiver's Nest",
     bg:{ sky:"#4a3050", ground:"#5a4050", ground2:"#4a3848", buildings:["#6a5060","#5a4850","#7a5860"], trees:["#3a5040","#2a4030"] },
     innocents:4, deceivers:8, time:55, scans:3,
+    treeCount:2, weather:"dark",
     decorate:{ nests:true, mist:true }
   }
 ];
@@ -369,6 +374,13 @@ function drawLevelBg(L){
 
   // Decorative elements per level
   const dec = L.decorate;
+  if(dec.road){
+    // Road/path through the scene
+    ctx.fillStyle = "#c8b898";
+    ctx.fillRect(0, H*0.64, W, px*1.5);
+    ctx.fillStyle = "#b8a888";
+    ctx.fillRect(0, H*0.64+px*0.3, W, px*0.9);
+  }
   if(dec.fences){
     // Simple fence
     ctx.strokeStyle="#8a7a5a"; ctx.lineWidth=px*0.35;
@@ -474,10 +486,11 @@ function drawLevelBg(L){
     }
   }
 
-  // Trees
+  // Trees - count varies per level
+  const tc = L.treeCount || 0;
   const trees = L.bg.trees;
-  for(let i=0;i<3;i++){
-    const tx = W*(0.08 + i*0.35), ty = H*0.55 + Math.random()*H*0.05;
+  for(let i=0;i<tc;i++){
+    const tx = W*(0.05 + (i+0.5)*(0.9/(tc+1))), ty = H*0.50 + (i%2)*H*0.04;
     ctx.fillStyle = trees[i%2];
     ctx.beginPath(); ctx.arc(tx,ty,px*2.2,0,Math.PI*2); ctx.fill();
     ctx.fillStyle = trees[(i+1)%2];
@@ -485,6 +498,32 @@ function drawLevelBg(L){
     // Trunk
     ctx.fillStyle = "#6a5a3a";
     ctx.fillRect(tx-px*0.3,ty,px*0.6,px*2);
+  }
+
+  // Weather effects
+  const w = L.weather || "sunny";
+  if(w === "cloudy"){
+    // Clouds in the sky
+    ctx.fillStyle = "rgba(255,255,255,0.15)";
+    for(let i=0;i<4;i++){
+      const cx = W*(0.1+i*0.28), cy = H*(0.08+Math.sin(i)*0.06), cr = px*(1.5+Math.sin(i*2)*0.5);
+      ctx.beginPath(); ctx.arc(cx,cy,cr,0,Math.PI*2); ctx.fill();
+      ctx.beginPath(); ctx.arc(cx+cr*0.8,cy-cr*0.3,cr*0.7,0,Math.PI*2); ctx.fill();
+      ctx.beginPath(); ctx.arc(cx-cr*0.6,cy+cr*0.1,cr*0.6,0,Math.PI*2); ctx.fill();
+    }
+  } else if(w === "windy"){
+    // Wind streaks
+    ctx.strokeStyle = "rgba(200,200,180,0.1)"; ctx.lineWidth = px*0.08;
+    for(let i=0;i<8;i++){
+      const wy = H*(0.1+Math.sin(i*1.7+Date.now()*0.001)*0.35);
+      ctx.beginPath(); ctx.moveTo(0,wy); ctx.lineTo(W,wy+Math.sin(i+Date.now()*0.002)*px*2); ctx.stroke();
+    }
+  } else if(w === "misty"){
+    // Light fog overlay
+    const grad = ctx.createRadialGradient(W*0.4,H*0.4,0,W*0.4,H*0.4,W*0.7);
+    grad.addColorStop(0,"rgba(200,210,220,0.08)");
+    grad.addColorStop(1,"rgba(200,210,220,0)");
+    ctx.fillStyle = grad; ctx.fillRect(0,0,W,H);
   }
 }
 
@@ -634,11 +673,11 @@ function drawInGameUI(){
   const L = LEVELS[G.level];
   if(!L) return;
   ctx.save();
-  ctx.font = `600 ${px*0.9}px -apple-system,sans-serif`;
+  ctx.font = `600 ${px*1.1}px -apple-system,sans-serif`;
   ctx.textAlign = "left";
-  ctx.fillStyle = "rgba(255,255,240,0.4)";
-  ctx.shadowColor = "rgba(0,0,0,0.4)"; ctx.shadowBlur = 4;
-  ctx.fillText(`Lv.${L.id} · ${L.name}`, px*0.8, px*1.8);
+  ctx.fillStyle = "rgba(255,255,240,0.7)";
+  ctx.shadowColor = "rgba(0,0,0,0.5)"; ctx.shadowBlur = 5;
+  ctx.fillText(`Lv.${L.id} · ${L.name}`, px*0.8, px*2);
   ctx.restore();
 
   // Scan hint if scans available
@@ -704,7 +743,7 @@ function shootAt(wx, wy){
       // Hit innocent!
       G.innocentsHit++;
       G.score = Math.max(0, G.score - 50);
-      G.shake = {x:6*px*0.1, y:6*px*0.1, life:0.4};
+      G.shake = {x:px*0.3, y:px*0.2, life:0.25};
       G.flash = 0.3;
       G.messages.push({
         text:"✗ Innocent!",
