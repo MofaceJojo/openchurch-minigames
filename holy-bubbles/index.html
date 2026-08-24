@@ -65,15 +65,31 @@ const DEMON_BOOK={
   imp:{speed:1.15,score:40},
   ghost:{speed:1.0,score:80},
   brute:{speed:0.95,score:100},
-  bomber:{speed:0.9,score:150}
+  bomber:{speed:0.9,score:150},
+  // 小BOSS：堕落天使——和主角一样能放炸弹、能吃宝箱
+  miniboss:{speed:1.9,score:800,hp:3,boss:true},
+  // 大BOSS：地狱君主——超快+三连弹+追踪
+  bigboss:{speed:3.2,score:5000,hp:6,boss:true}
 };
 function levelRoster(level){
-  // 每层出场阵容：高层包含低层怪 + 新怪
-  if(level===1)return['hound','hound','imp'];
-  if(level===2)return['hound','imp','imp','imp'];
-  if(level===3)return['hound','imp','ghost','ghost'];
-  if(level===4)return['imp','ghost','brute','brute'];
-  return['ghost','brute','brute','bomber',...(level>5?['bomber']:[])];
+  // 每层出场阵容：高层包含低层怪 + 新怪；小BOSS每10关刷新，
+  // 过了对应区间后小BOSS降级为常驻普通怪
+  const base=(l)=>{ if(l===1)return['hound','hound','imp'];
+    if(l===2)return['hound','imp','imp','imp'];
+    if(l===3)return['hound','imp','ghost','ghost'];
+    if(l===4)return['imp','ghost','brute','brute'];
+    return['ghost','brute','brute','bomber',...(l>5?['bomber']:[])]; };
+  let roster=base(Math.min(level,5));
+  // 第11~19关起：小BOSS作为普通怪混编（第10关本体由spawnBoss处理）
+  if(level>=11&&level<50)roster=roster.concat(['miniboss']);
+  if(level>=51)roster=roster.concat(['miniboss','miniboss']);
+  return roster;
+}
+// BOSS 出场规则：level%10===0 → 小BOSS；level%50===0 → 大BOSS(替代小BOSS)
+function bossForLevel(level){
+  if(level>0&&level%50===0)return'bigboss';
+  if(level>0&&level%10===0)return'miniboss';
+  return null;
 }
 
 // ================= 状态 =================
@@ -93,11 +109,31 @@ function spawnEnemies(){
     if(Math.hypot(c-1,r-1)<5)continue;
     const kind=roster[placed];
     const book=DEMON_BOOK[kind];
-    enemies.push({kind,c,r,x:c*T+T/2,y:r*T+T/2,dir:'left',dead:false,
-      speed:book.speed*(1+(level-1)*0.05),
-      dashT:200,dashing:0,bombT:240});
+    enemies.push(makeDemon(kind,c,r,book));
     placed++;
   }
+  // BOSS 层：追加 BOSS（远离出生点）
+  const bk=bossForLevel(level);
+  if(bk){
+    for(let tries=0;tries<400;tries++){
+      const c=Math.floor(COLS/2-4+Math.random()*8);
+      const r=Math.floor(ROWS/2-3+Math.random()*6);
+      if(c<2||r<2||c>=COLS-2||r>=ROWS-2)continue;
+      if(map[idx(c,r)]!==0)continue;
+      if(Math.hypot(c-1,r-1)<7)continue;
+      enemies.push(makeDemon(bk,c,r,DEMON_BOOK[bk]));
+      break;
+    }
+  }
+}
+function makeDemon(kind,c,r,book){
+  return {kind,c,r,x:c*T+T/2,y:r*T+T/2,dir:'left',dead:false,
+    hp:book.hp||1,maxHp:book.hp||1,
+    speed:book.speed*(1+(level-1)*0.05),
+    dashT:200,dashing:0,bombT:240,
+    boss:!!book.boss,hitFlash:0,
+    bombLimit:kind==='bigboss'?3:(kind==='miniboss'?2:1),
+    myBombs:0};
 }
 
 function startLevel(fresh){
@@ -165,11 +201,18 @@ function moveEntity(e,dx,dy){
 function tryBomb(owner){
   if(state!=='play')return;
   const c=Math.floor(owner.x/T),r=Math.floor(owner.y/T);
-  const limit=owner===player?player.maxBombs:1;
-  if(bombs.some(b=>b.c===c&&b.r===r)||bombs.filter(b=>b.owner===owner).length>=limit)return;
-  const bomb={c,r,t:140,left:true,passable:true,owner,
-              power:owner===player?player.power:(owner.kind==='bomber'?Math.min(1+Math.floor(level/3),4):1)};
-  if(owner!==player){bomb.left=false;bomb.passable=false;}
+  const isPlayer=owner===player;
+  // 主角用 maxBombs；BOSS 用自身 bombLimit（大BOSS=3）
+  const limit=isPlayer?player.maxBombs:(owner.bombLimit||1);
+  if(bombs.some(b=>b.c===c&&b.r===r))return;
+  if(bombs.filter(b=>b.owner===owner).length>=limit)return;
+  let power;
+  if(isPlayer)power=player.power;
+  else if(owner.kind==='bigboss')power=Math.min(2+Math.floor(level/10)+(owner.bombPower||0),6);
+  else if(owner.kind==='miniboss')power=Math.min(1+Math.floor(level/10)+(owner.bombPower||0),5);
+  else power=(owner.kind==='bomber'?Math.min(1+Math.floor(level/3),4):1);
+  const bomb={c,r,t:140,left:true,passable:true,owner,power};
+  if(!isPlayer){bomb.left=false;bomb.passable=false;}
   bombs.push(bomb);
 }
 
@@ -198,9 +241,10 @@ function update(){
     if(en.kind==='brute'){
       if(--en.dashT<=0){en.dashing=45;en.dashT=220+Math.random()*140;}
     }
-    if(en.kind==='bomber'&&--en.bombT<=0){
-      en.bombT=300+Math.random()*180;
-      tryBomb(en);   // 轰炸魔也会放炸弹！
+    // 轰炸魔 & BOSS：都会放炸弹
+    if((en.kind==='bomber'||en.boss)&&--en.bombT<=0){
+      en.bombT=en.boss?(120+Math.random()*90):(300+Math.random()*180);
+      tryBomb(en);   // 大BOSS冷却短、可同时3颗
     }
 
     let sp=en.speed*(en.dashing>0?2.8:1);
@@ -213,8 +257,20 @@ function update(){
         const nc=en.c+DIRS[k][0],nr=en.r+DIRS[k][1];
         if(!solidCell(nc,nr,en.kind==='ghost')&&!bombs.some(b=>b.c===nc&&b.r===nr))opts.push(k);
       }
-      if(opts.length)
-        en.dir=(opts.includes(en.dir)&&Math.random()<0.6)?en.dir:opts[Math.random()*opts.length|0];
+      if(opts.length){
+        // 大BOSS：追踪玩家（70%概率选缩短距离的方向）
+        if(en.kind==='bigboss'&&Math.random()<0.7){
+          const pc2=Math.floor(player.x/T),pr2=Math.floor(player.y/T);
+          opts.sort((a,b)=>{
+            const da=Math.abs(en.c+DIRS[a][0]-pc2)+Math.abs(en.r+DIRS[a][1]-pr2);
+            const db=Math.abs(en.c+DIRS[b][0]-pc2)+Math.abs(en.r+DIRS[b][1]-pr2);
+            return da-db;
+          });
+          en.dir=opts[0];
+        }else{
+          en.dir=(opts.includes(en.dir)&&Math.random()<0.6)?en.dir:opts[Math.random()*opts.length|0];
+        }
+      }
       else en.dir=OPP[en.dir];
       // 关键：把目标格推进到当前方向上的下一格，否则dist永远为0、原地不动
       const tc=en.c+DIRS[en.dir][0], tr=en.r+DIRS[en.dir][1];
@@ -226,6 +282,7 @@ function update(){
       en.y+=DIRS[en.dir][1]*sp;
     }
     if(en.dashing>0)en.dashing--;
+    if(en.hitFlash>0)en.hitFlash--;
   }
 
   // --- 炸弹（区分主人；人站上面可穿过） ---
@@ -249,10 +306,30 @@ function update(){
     }
     for(const en of enemies){
       if(!en.dead&&en.c===f.c&&en.r===f.r){
-        en.dead=true;score+=DEMON_BOOK[en.kind].score;
-        // 死亡特效：白烟散去 + 飘出的小天使灵魂
-        poofs.push({x:en.x,y:en.y,t:36,kind:en.kind});
+        if(en.boss&&en.hitFlash<=0){
+          // BOSS：掉1血+短无敌闪烁；血尽才死
+          en.hp--;en.hitFlash=45;
+          if(en.hp<=0){
+            en.dead=true;score+=DEMON_BOOK[en.kind].score;
+            poofs.push({x:en.x,y:en.y,t:60,kind:en.kind,big:true});
+          }
+        }else if(!en.boss){
+          en.dead=true;score+=DEMON_BOOK[en.kind].score;
+          poofs.push({x:en.x,y:en.y,t:36,kind:en.kind});
+        }
       }
+    }
+  }
+
+  // --- BOSS 吃技能宝箱（和主角抢道具！） ---
+  for(let i=drops.length-1;i>=0;i--){
+    const d=drops[i];
+    const eater=enemies.find(en=>!en.dead&&en.boss&&Math.floor(en.x/T)===d.c&&Math.floor(en.y/T)===d.r);
+    if(eater){
+      drops.splice(i,1);
+      if(d.type==='fire')eater.bombPower=(eater.bombPower||0)+1;   // 简化：BOSS吃火→下次炸弹威力临时+1
+      else if(d.type==='life')eater.hp=Math.min(eater.hp+1,eater.maxHp);  // 吃心回血
+      else eater.speed=Math.min(eater.speed*1.06,5.5);             // 其他宝箱→加速
     }
   }
 
@@ -437,6 +514,79 @@ function drawDemon(en){
       ctx.beginPath();ctx.arc(x,y+bob,T*0.42,0,7);ctx.stroke();
     }
   }
+  else if(en.kind==='miniboss'){
+    // 小BOSS 堕落天使：灰白身 + 黑色蝙蝠大翼 + 暗紫光环 + 裂纹脸
+    const x2=x,y2=y;
+    // 大黑翼
+    ctx.fillStyle='#3a2a45';
+    const bp=Math.sin(t*8)*4;
+    ctx.beginPath();
+    ctx.moveTo(x2-T*0.22,y2-4);ctx.quadraticCurveTo(x2-T*0.72,y2-26-bp,x2-T*0.6,y2+10);
+    ctx.quadraticCurveTo(x2-T*0.42,y2+2,x2-T*0.22,y2+6);ctx.closePath();ctx.fill();
+    ctx.beginPath();
+    ctx.moveTo(x2+T*0.22,y2-4);ctx.quadraticCurveTo(x2+T*0.72,y2-26-bp,x2+T*0.6,y2+10);
+    ctx.quadraticCurveTo(x2+T*0.42,y2+2,x2+T*0.22,y2+6);ctx.closePath();ctx.fill();
+    // 身体（灰白，比普通怪大）
+    ctx.fillStyle='#ded6e2';
+    ctx.beginPath();ctx.arc(x2,y2+bob,T*0.4,0,7);ctx.fill();
+    ctx.strokeStyle='#9a8aa5';ctx.lineWidth=2;ctx.beginPath();ctx.arc(x2,y2+bob,T*0.4,0,7);ctx.stroke();
+    // 暗紫色光环（倾斜、有裂感）
+    ctx.strokeStyle='#7c4dff';ctx.lineWidth=3;
+    ctx.beginPath();ctx.ellipse(x2,y2-T*0.48,T*0.24,T*0.08,-0.15,0,7);ctx.stroke();
+    // 凶恶斜眼
+    ctx.fillStyle='#2a1a35';
+    ctx.beginPath();
+    ctx.moveTo(x2-10,y2-5+bob);ctx.lineTo(x2-2,y2-2+bob);ctx.lineTo(x2-10,y2+bob);ctx.closePath();ctx.fill();
+    ctx.beginPath();
+    ctx.moveTo(x2+10,y2-5+bob);ctx.lineTo(x2+2,y2-2+bob);ctx.lineTo(x2+10,y2+bob);ctx.closePath();ctx.fill();
+    // 尖牙嘴
+    ctx.fillStyle='#2a1a35';
+    ctx.beginPath();ctx.arc(x2,y2+7+bob,5,0,Math.PI);ctx.fill();
+    ctx.fillStyle='#fff';
+    for(let i=-1;i<=1;i++){
+      ctx.beginPath();ctx.moveTo(x2+i*4-1.5,y2+7+bob);ctx.lineTo(x2+i*4+1.5,y2+7+bob);ctx.lineTo(x2+i*4,y2+10+bob);ctx.closePath();ctx.fill();
+    }
+  }
+  else if(en.kind==='bigboss'){
+    // 大BOSS 地狱君主：巨大红黑魔 + 双弯角 + 王冠尖刺 + 怒火眼
+    const x2=x,y2=y,scale=1.25;
+    ctx.save();ctx.translate(x2,y2);ctx.scale(scale,scale);
+    // 巨大黑翼（双层）
+    ctx.fillStyle='#1a0f20';
+    const bp2=Math.sin(t*7)*5;
+    ctx.beginPath();
+    ctx.moveTo(-T*0.24,-4);ctx.quadraticCurveTo(-T*0.85,-30-bp2,-T*0.75,14);
+    ctx.quadraticCurveTo(-T*0.5,2,-T*0.24,8);ctx.closePath();ctx.fill();
+    ctx.beginPath();
+    ctx.moveTo(T*0.24,-4);ctx.quadraticCurveTo(T*0.85,-30-bp2,T*0.75,14);
+    ctx.quadraticCurveTo(T*0.5,2,T*0.24,8);ctx.closePath();ctx.fill();
+    // 身体（深红）
+    ctx.fillStyle='#b71c1c';
+    ctx.beginPath();ctx.arc(0,bob,T*0.44,0,7);ctx.fill();
+    ctx.strokeStyle='#7f0000';ctx.lineWidth=3;ctx.beginPath();ctx.arc(0,bob,T*0.44,0,7);ctx.stroke();
+    // 弯角（两只大角）
+    ctx.strokeStyle='#4a148c';ctx.lineWidth=7;ctx.lineCap='round';
+    ctx.beginPath();ctx.moveTo(-T*0.2,-T*0.24+bob);ctx.quadraticCurveTo(-T*0.5,-T*0.55+bob,-T*0.28,-T*0.68+bob);ctx.stroke();
+    ctx.beginPath();ctx.moveTo(T*0.2,-T*0.24+bob);ctx.quadraticCurveTo(T*0.5,-T*0.55+bob,T*0.28,-T*0.68+bob);ctx.stroke();
+    // 王冠尖刺（金色，三根）
+    ctx.fillStyle='#ffd54f';
+    ctx.beginPath();ctx.moveTo(-12,-T*0.34+bob);ctx.lineTo(-9,-T*0.52+bob);ctx.lineTo(-6,-T*0.34+bob);ctx.closePath();ctx.fill();
+    ctx.beginPath();ctx.moveTo(-3,-T*0.36+bob);ctx.lineTo(0,-T*0.56+bob);ctx.lineTo(3,-T*0.36+bob);ctx.closePath();ctx.fill();
+    ctx.beginPath();ctx.moveTo(6,-T*0.34+bob);ctx.lineTo(9,-T*0.52+bob);ctx.lineTo(12,-T*0.34+bob);ctx.closePath();ctx.fill();
+    // 怒火双眼（橙色发光）
+    ctx.fillStyle='#ff9800';
+    ctx.beginPath();ctx.ellipse(-9,-4+bob,4,2.5,-0.3,0,7);ctx.ellipse(9,-4+bob,4,2.5,0.3,0,7);ctx.fill();
+    ctx.fillStyle='#fff';
+    ctx.beginPath();ctx.arc(-9,-4+bob,1.5,0,7);ctx.arc(9,-4+bob,1.5,0,7);ctx.fill();
+    // 咆哮大嘴
+    ctx.fillStyle='#4a0d0d';
+    ctx.beginPath();ctx.arc(0,8+bob,8,0,Math.PI);ctx.fill();
+    ctx.fillStyle='#fff';
+    for(let i=0;i<4;i++){
+      ctx.beginPath();ctx.moveTo(-6+i*4,8+bob);ctx.lineTo(-4+i*4,8+bob);ctx.lineTo(-5+i*4,11.5+bob);ctx.closePath();ctx.fill();
+    }
+    ctx.restore();
+  }
   else if(en.kind==='bomber'){
     // 轰炸魔：黑袍小魔 + 金瞳 + 手持小火把
     ctx.fillStyle='#5d4037';
@@ -578,7 +728,20 @@ function draw(){
   }
 
   // ---- 恶魔 ----
-  for(const en of enemies){if(!en.dead)drawDemon(en);}
+  for(const en of enemies){
+    if(en.dead)continue;
+    drawDemon(en);
+    // BOSS：头顶血条 + 受击闪烁
+    if(en.boss){
+      const bw=T*0.8,bx=en.x-bw/2,by=en.y-T*0.62;
+      if(!(en.hitFlash>0&&en.hitFlash%8<4)){   // 受击时血条也闪
+        ctx.fillStyle='rgba(0,0,0,.45)';
+        ctx.fillRect(bx-1,by-1,bw+2,7);
+        ctx.fillStyle=en.kind==='bigboss'?'#ff5252':'#ffd54f';
+        ctx.fillRect(bx,by,bw*(en.hp/en.maxHp),5);
+      }
+    }
+  }
 
   // ---- 主角小天使 ----
   if(!(player.hurtT>0&&player.hurtT%10<5)){
