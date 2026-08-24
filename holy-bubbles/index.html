@@ -612,9 +612,13 @@ function drawDemon(en){
 }
 
 function draw(){
-  // ---- 明亮的地狱暮色 ----
-  ctx.fillStyle='#f7c98b';ctx.fillRect(0,0,cv.width,cv.height);
-  ctx.strokeStyle='#eda368';ctx.lineWidth=2;
+  // ---- 明亮的地狱暮色（带纵深光晕）----
+  const bgGrad=ctx.createRadialGradient(cv.width/2,cv.height*0.35,60,cv.width/2,cv.height*0.55,cv.width*0.75);
+  bgGrad.addColorStop(0,'#ffe3b8');
+  bgGrad.addColorStop(0.6,'#f7c98b');
+  bgGrad.addColorStop(1,'#eda06a');
+  ctx.fillStyle=bgGrad;ctx.fillRect(0,0,cv.width,cv.height);
+  ctx.strokeStyle='rgba(224,150,95,.5)';ctx.lineWidth=2;
   for(let i=0;i<cv.width;i+=88)for(let j=0;j<cv.height;j+=66){
     ctx.beginPath();ctx.moveTo(i,j+33);ctx.lineTo(i+44,j);ctx.lineTo(i+88,j+33);ctx.stroke();
   }
@@ -622,16 +626,39 @@ function draw(){
   for(let r=0;r<ROWS;r++)for(let c=0;c<COLS;c++){
     const v=map[idx(c,r)],x=c*T,y=r*T;
     if(v===1){
+      // 硬墙：底部投影 + 立体高光
+      ctx.fillStyle='rgba(90,50,30,.18)';
+      roundRect(x+3,y+5,T-2,T-2,8);ctx.fill();
       ctx.fillStyle='#9a7d92';roundRect(x+1,y+1,T-2,T-2,8);ctx.fill();
-      ctx.fillStyle='#b595ab';roundRect(x+4,y+4,T-8,T/2-6,6);ctx.fill();
-      ctx.strokeStyle='#ff7043';ctx.lineWidth=2;
+      const wg=ctx.createLinearGradient(x,y,x,y+T);
+      wg.addColorStop(0,'#c4a4ba');wg.addColorStop(0.45,'#b595ab');wg.addColorStop(1,'#8a6d80');
+      ctx.fillStyle=wg;roundRect(x+4,y+4,T-8,T/2-6,6);ctx.fill();
+      ctx.fillStyle='rgba(255,255,255,.35)';
+      roundRect(x+7,y+6,T-14,4,2);ctx.fill();
+      // 熔岩缝：发光渐变
+      const lg=ctx.createLinearGradient(x+10,T-14+y,x+T-12,y+T-6);
+      lg.addColorStop(0,'rgba(255,87,34,.25)');lg.addColorStop(0.5,'#ff7043');lg.addColorStop(1,'rgba(255,87,34,.25)');
+      ctx.strokeStyle=lg;ctx.lineWidth=2.5;
       ctx.beginPath();ctx.moveTo(x+10,y+T-12);ctx.lineTo(x+T/2,y+T-18);ctx.lineTo(x+T-12,y+T-9);ctx.stroke();
     }else if(v===2){
-      ctx.fillStyle='#8a6076';roundRect(x+3,y+3,T-6,T-6,6);ctx.fill();
-      ctx.strokeStyle='#a97e94';ctx.lineWidth=2;
+      // 软砖：投影 + 立体渐变 + 高光边
+      ctx.fillStyle='rgba(90,50,30,.15)';
+      roundRect(x+5,y+6,T-6,T-6,6);ctx.fill();
+      const bg2=ctx.createLinearGradient(x,y,x,y+T);
+      bg2.addColorStop(0,'#a5798f');bg2.addColorStop(1,'#7c5468');
+      ctx.fillStyle=bg2;roundRect(x+3,y+3,T-6,T-6,6);ctx.fill();
+      ctx.strokeStyle='#b58aa0';ctx.lineWidth=2;
       roundRect(x+7,y+7,T-14,T-14,4);ctx.stroke();
+      ctx.fillStyle='rgba(255,255,255,.28)';
+      roundRect(x+9,y+9,T-18,4,2);ctx.fill();
+      // 砖心火种：脉动辉光
+      const pulse=0.6+Math.sin(Date.now()*0.004+c+r)*0.4;
+      ctx.fillStyle=`rgba(255,112,67,${0.35*pulse})`;
+      ctx.beginPath();ctx.arc(x+T/2,y+T/2,8,0,7);ctx.fill();
       ctx.fillStyle='#ff5722';
       ctx.beginPath();ctx.arc(x+T/2,y+T/2,3.5,0,7);ctx.fill();
+      ctx.fillStyle='rgba(255,214,79,.9)';
+      ctx.beginPath();ctx.arc(x+T/2-1,y+T/2-1,1.5,0,7);ctx.fill();
     }
   }
 
@@ -647,8 +674,21 @@ function draw(){
     const x=d.c*T+T/2,y=d.r*T+T/2+Math.sin(Date.now()*0.005+d.c)*2.5;
     const st=DROP_STYLE[d.type];
     ctx.save();ctx.translate(x,y);
-    ctx.fillStyle=st.bg;roundRect(-13,-13,26,26,7);ctx.fill();
-    ctx.strokeStyle='rgba(0,0,0,.2)';ctx.lineWidth=2;roundRect(-13,-13,26,26,7);ctx.stroke();
+    // 落地投影
+    ctx.fillStyle='rgba(90,50,30,.2)';
+    ctx.beginPath();ctx.ellipse(0,17,11,3.5,0,0,7);ctx.fill();
+    // 柔和辉光
+    const glow=ctx.createRadialGradient(0,0,4,0,0,22);
+    glow.addColorStop(0,st.bg+'66');glow.addColorStop(1,st.bg+'00');
+    ctx.fillStyle=glow;ctx.beginPath();ctx.arc(0,0,22,0,7);ctx.fill();
+    // 箱体：立体渐变
+    const bg3=ctx.createLinearGradient(0,-13,0,13);
+    bg3.addColorStop(0,'#ffffff');bg3.addColorStop(0.18,st.bg);bg3.addColorStop(1,st.fg+'aa');
+    ctx.fillStyle=bg3;roundRect(-13,-13,26,26,7);ctx.fill();
+    ctx.strokeStyle='rgba(60,30,20,.35)';ctx.lineWidth=1.8;roundRect(-13,-13,26,26,7);ctx.stroke();
+    // 顶部高光条
+    ctx.fillStyle='rgba(255,255,255,.55)';
+    roundRect(-9,-10,18,4,2);ctx.fill();
     ctx.fillStyle=st.fg;
     if(d.type==='fire'){
       ctx.beginPath();ctx.moveTo(0,-9);ctx.quadraticCurveTo(8,0,0,9);ctx.quadraticCurveTo(-8,0,0,-9);ctx.fill();
@@ -666,19 +706,30 @@ function draw(){
     ctx.restore();
   }
 
-  // ---- 十字圣光爆炸（不再叠加小十字） ----
+  // ---- 十字圣光爆炸（多层辉光 + 柔和光晕） ----
   for(const f of flames){
     const cx=f.c*T+T/2,cy=f.r*T+T/2,p=f.t/24;
     const arm=T*(0.35+0.45*p);
     ctx.globalAlpha=p;
-    ctx.fillStyle='rgba(255,224,130,.4)';
-    ctx.beginPath();ctx.arc(cx,cy,T*0.5*p+8,0,7);ctx.fill();
+    // 外层大光晕（径向渐变）
+    const halo=ctx.createRadialGradient(cx,cy,4,cx,cy,T*0.75*p+16);
+    halo.addColorStop(0,'rgba(255,240,180,.75)');
+    halo.addColorStop(0.5,'rgba(255,224,130,.4)');
+    halo.addColorStop(1,'rgba(255,224,130,0)');
+    ctx.fillStyle=halo;
+    ctx.beginPath();ctx.arc(cx,cy,T*0.75*p+16,0,7);ctx.fill();
+    // 光柱主体：带渐变
+    const vg=ctx.createLinearGradient(cx,cy-arm,cx,cy+arm);
+    vg.addColorStop(0,'#ffe082');vg.addColorStop(0.5,'#fffde7');vg.addColorStop(1,'#ffe082');
     ctx.fillStyle='#ffe082';
     ctx.fillRect(cx-arm,cy-5,arm*2,10);
     ctx.fillRect(cx-5,cy-arm,10,arm*2);
     ctx.fillStyle='#fffde7';
     ctx.fillRect(cx-arm*0.6,cy-2.5,arm*1.2,5);
     ctx.fillRect(cx-2.5,cy-arm*0.6,5,arm*1.2);
+    // 中心亮核
+    ctx.fillStyle='rgba(255,255,255,.9)';
+    ctx.beginPath();ctx.arc(cx,cy,6*p+3,0,7);ctx.fill();
     ctx.globalAlpha=1;
   }
 
@@ -713,16 +764,32 @@ function draw(){
     ctx.globalAlpha=1;
   }
 
-  // ---- 炸弹 ----
+  // ---- 炸弹（球体感：渐变+高光+投影） ----
   for(const b of bombs){
     const x=b.c*T+T/2,y=b.r*T+T/2+Math.sin(b.t*0.15)*2;
+    // 投影
+    ctx.fillStyle='rgba(90,50,30,.22)';
+    ctx.beginPath();ctx.ellipse(x,y+T*0.34,T*0.24,T*0.07,0,0,7);ctx.fill();
     if(b.owner!==player)ctx.globalAlpha=0.95;
     const dark=b.owner===player?'#4a3040':'#37272c';
-    ctx.fillStyle=dark;ctx.beginPath();ctx.arc(x,y+2,T*0.32,0,7);ctx.fill();
-    ctx.fillStyle='#6e4a5a';ctx.beginPath();ctx.arc(x-4,y-4,T*0.11,0,7);ctx.fill();
+    const bombG=ctx.createRadialGradient(x-5,y-6,2,x,y+2,T*0.36);
+    bombG.addColorStop(0,'#8a6070');
+    bombG.addColorStop(0.5,dark);
+    bombG.addColorStop(1,'#241820');
+    ctx.fillStyle=bombG;ctx.beginPath();ctx.arc(x,y+2,T*0.32,0,7);ctx.fill();
+    // 球面高光
+    ctx.fillStyle='rgba(255,255,255,.4)';
+    ctx.beginPath();ctx.ellipse(x-5,y-6,T*0.09,T*0.05,-0.6,0,7);ctx.fill();
     ctx.strokeStyle='#ffb74d';ctx.lineWidth=2.5;ctx.lineCap='round';
     ctx.beginPath();ctx.moveTo(x,y-T*0.3);ctx.quadraticCurveTo(x+7,y-T*0.46,x+11,y-T*0.36);ctx.stroke();
-    ctx.fillStyle=b.t%30<15?'#ffd54f':'#ff5722';
+    // 火花：闪烁+小光晕
+    const sparkOn=b.t%30<15;
+    const sc=sparkOn?'#ffd54f':'#ff5722';
+    if(sparkOn){
+      ctx.fillStyle='rgba(255,213,79,.45)';
+      ctx.beginPath();ctx.arc(x+11,y-T*0.37,8,0,7);ctx.fill();
+    }
+    ctx.fillStyle=sc;
     ctx.beginPath();ctx.arc(x+11,y-T*0.37,4,0,7);ctx.fill();
     ctx.globalAlpha=1;
   }
@@ -743,9 +810,15 @@ function draw(){
     }
   }
 
-  // ---- 主角小天使 ----
+  // ---- 主角小天使（带柔和圣辉） ----
   if(!(player.hurtT>0&&player.hurtT%10<5)){
     const x=player.x,y=player.y,t=Date.now()*0.001;
+    // 脚下圣辉光环
+    const aura=ctx.createRadialGradient(x,y+T*0.3,2,x,y+T*0.3,T*0.55);
+    aura.addColorStop(0,'rgba(255,240,180,.4)');
+    aura.addColorStop(1,'rgba(255,240,180,0)');
+    ctx.fillStyle=aura;
+    ctx.beginPath();ctx.arc(x,y+T*0.3,T*0.55,0,7);ctx.fill();
     const flap=Math.sin(t*9)*4;
     ctx.fillStyle='#fff8e1';
     ctx.beginPath();
