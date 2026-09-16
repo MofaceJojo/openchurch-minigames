@@ -1,0 +1,391 @@
+<!DOCTYPE html>
+<html lang="en" data-page-node-id="XjnON3Ik8vNeS7dtBMMmGe">
+<head data-page-node-id="m1q4BqyfixZs7k3h1fGiiT">
+<meta charset="utf-8" data-page-node-id="CBT8egNzIhv4gDOjjeuMmH">
+<meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no" data-page-node-id="bmXQ4Ww5KAbSPhGGBhSi7O">
+<title>Arcade Mahjong · OpenChurch</title>
+<meta name="theme-color" content="#6b4a1e" data-page-node-id="h9zOYyxsBPXruwTakRlI0Q">
+<link rel="icon" href="../assets/openchurch-cross.png" data-page-node-id="pJOzWxtn66BIDc6nXFFBlw">
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  html, body { height:100%; overflow:hidden; }
+  body { font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+    background:#6b4a1e; display:flex; flex-direction:column; align-items:stretch;
+    touch-action:none; }
+  #topbar { display:flex; align-items:center; gap:8px; padding:6px 10px;
+    background:rgba(0,0,0,.15); flex-shrink:0; }
+  .back { font-size:12px; text-decoration:none; color:#3d2a10; border:1.5px solid #8a6a35;
+    border-radius:10px; padding:4px 10px; background:rgba(255,240,200,.35); flex-shrink:0; }
+  .back:hover { color:#fff; border-color:#fff; }
+  #muteBtn { background:none; border:1.5px solid #8a6a35; border-radius:10px; padding:4px 8px;
+    color:#3d2a10; font-size:14px; cursor:pointer; flex-shrink:0; }
+  #diffSel { display:flex; gap:3px; margin-left:auto; }
+  #diffSel button { font-size:10px; padding:3px 8px; border:1px solid #8a6a35; border-radius:8px;
+    background:rgba(255,240,200,.4); color:#3d2a10; cursor:pointer; }
+  #diffSel button.active { background:#c42020; color:#fff; border-color:#c42020; }
+  #wrap { flex:1; display:flex; align-items:center; justify-content:center;
+    width:100%; overflow:hidden; }
+  canvas { display:block; box-shadow:0 4px 16px rgba(30,20,10,.5);
+    image-rendering:pixelated; image-rendering:crisp-edges; cursor:pointer; }
+</style>
+</head>
+<body data-page-node-id="KKn7ORlkQii2mGhRAx7rrc">
+
+<div id="topbar" data-page-node-id="f6vRjVHwXEmEmuHvkQHfLi">
+  <a class="back" href="../" data-page-node-id="6NQn2kr70SYDz7JDZ8BGed">← All games</a>
+  <button id="muteBtn" data-page-node-id="Glc5W4JdVWEmDxqoMjXjoh">♪</button>
+</div>
+
+<div id="diffSel" data-page-node-id="osU04rj8bhf7JdEhkPLoCf">
+  <button data-d="gentle" data-page-node-id="iC29PgfEP3axWKtdCrXrHq">Gentle</button>
+  <button data-d="normal" class="active" data-page-node-id="iKwWWVwwN9iX9mPGUoPd2G">Normal</button>
+  <button data-d="brave" data-page-node-id="BSauECCoV6OLXJvclgp0rF">Brave</button>
+</div>
+
+<div id="wrap" data-page-node-id="ne15YYaSK4VfPqo9C2viIE">
+  <canvas id="cv" data-page-node-id="JOSEtSEQlvv1BxZ0WzW5Kc"></canvas>
+</div>
+
+<script src="core.js?v=4"></script>
+<script src="render.js?v=4"></script>
+<script src="audio.js?v=4"></script>
+<script>
+"use strict";
+(function () {
+  var cv = document.getElementById("cv");
+  var SS = 2;
+  cv.width = Core.W * SS;
+  cv.height = Core.H * SS;
+  var ctx = cv.getContext("2d");
+  ctx.scale(SS, SS);
+
+  function resizeCanvas() {
+    var bar = document.getElementById("topbar");
+    var availH = window.innerHeight - bar.offsetHeight;
+    var availW = window.innerWidth;
+    var scale = Math.min(availW / Core.W, availH / Core.H);
+    cv.style.width = Math.floor(Core.W * scale) + "px";
+    cv.style.height = Math.floor(Core.H * scale) + "px";
+  }
+  resizeCanvas();
+  window.addEventListener("resize", resizeCanvas);
+
+  var savedDiff = "normal";
+  try { savedDiff = localStorage.getItem("mahjong_diff") || "normal"; } catch (e) {}
+
+  var st = Core.create(savedDiff);
+  Audio.loadMuted();
+  updateDiffButtons();
+
+  function updateDiffButtons() {
+    var btns = document.querySelectorAll("#diffSel button");
+    for (var i = 0; i < btns.length; i++) {
+      btns[i].classList.toggle("active", btns[i].dataset.d === st.diff);
+    }
+  }
+
+  function handleTap(clientX, clientY) {
+    Audio.init();
+    var rect = cv.getBoundingClientRect();
+    var x = (clientX - rect.left) / rect.width * Core.W;
+    var y = (clientY - rect.top) / rect.height * Core.H;
+
+    /* 菜单：任意点击开始 */
+    if (st.mode === "menu") {
+      Audio.uiClick();
+      Core.advance(st);
+      Audio.dealSfx();
+      return;
+    }
+
+    /* 一局结束 / 流局：显示下一局 */
+    if (st.mode === "round_over" || st.mode === "draw") {
+      if (st.mode === "round_over") {
+        var w = st.winInfo;
+        if (w && w.winner === 0) {
+          st.players[0].wins++;
+          for (var i = 1; i < st.players.length; i++) st.players[i].losses++;
+          Audio.huSfx();
+        } else {
+          Audio.loseSfx();
+        }
+      } else {
+        Audio.drawSfx();
+      }
+      Audio.uiClick();
+      Core.advance(st);
+      Audio.dealSfx();
+      return;
+    }
+
+    /* 三元换牌：多选模式 */
+    if (st.mode === "await_donden") {
+      var li = Render.layoutInfo();
+      /* EXCHANGE 按钮 */
+      if (x >= li.DONDEN_EXCH_X && x <= li.DONDEN_EXCH_X + li.DONDEN_EXCH_W &&
+          y >= li.DONDEN_EXCH_Y && y <= li.DONDEN_EXCH_Y + li.DONDEN_EXCH_H) {
+        if (st.dondenSelSet.length > 0) {
+          Audio.uiClick();
+          var animData = [];
+          for (var di = 0; di < st.dondenSelSet.length; di++) {
+            var dIdx = st.dondenSelSet[di];
+            animData.push({ tile: st.players[0].hand[dIdx], x: li.HAND_X + dIdx * li.STRIDE });
+          }
+          Core.doDonDenExchange(st, st.dondenSelSet.slice());
+          for (var ai = 0; ai < animData.length; ai++) {
+            Render.addAnim("donden",
+              [animData[ai].x, li.HAND_Y],
+              [li.WALL_X, li.WALL_Y],
+              300 + ai * 50, animData[ai].tile);
+          }
+          Audio.dealSfx();
+        }
+        return;
+      }
+      /* 跳过按钮 */
+      if (x >= li.DONDEN_SKIP_X && x <= li.DONDEN_SKIP_X + li.DONDEN_SKIP_W &&
+          y >= li.DONDEN_SKIP_Y && y <= li.DONDEN_SKIP_Y + li.DONDEN_SKIP_H) {
+        Audio.uiClick();
+        Core.skipDonDen(st);
+        Audio.dealSfx();
+        return;
+      }
+      /* 点手牌：选中 / 取消选中 */
+      var idx = Render.getHandTileAt(x, y, st);
+      if (idx >= 0 && idx < st.players[0].hand.length) {
+        var pos = st.dondenSelSet.indexOf(idx);
+        if (pos >= 0) {
+          st.dondenSelSet.splice(pos, 1);
+        } else {
+          st.dondenSelSet.push(idx);
+        }
+        Audio.pickSfx();
+        return;
+      }
+      return;
+    }
+
+    /* 立直按钮 */
+    if (st.mode === "await_discard" && Core.canRiichi(st, 0) && !st.riichi[0]) {
+      var li3 = Render.layoutInfo();
+      if (x >= li3.RIICHI_BTN_X && x <= li3.RIICHI_BTN_X + li3.RIICHI_BTN_W &&
+          y >= li3.RIICHI_BTN_Y && y <= li3.RIICHI_BTN_Y + li3.RIICHI_BTN_H) {
+        Audio.uiClick();
+        Core.declareRiichi(st, 0);
+        st.mode = "await_discard";
+        return;
+      }
+    }
+
+    /* 自摸胡面板 */
+    if (st.mode === "await_hu_choice") {
+      var li2 = Render.layoutInfo();
+      if (x >= li2.HU_BTN_X && x <= li2.HU_BTN_X + li2.HU_BTN_W &&
+          y >= li2.HU_BTN_Y && y <= li2.HU_BTN_Y + li2.HU_BTN_H) {
+        Audio.huSfx();
+        st.mode = "round_over";
+        var hand = st.players[0].hand;
+        /* 和牌张 = 本回合摸到的那张牌，不能用 hand[length-1]（手牌是排序的） */
+        var winTile = Core.drawnTileOf(st, st.players[0]);
+        var yaku = Core.checkYaku(hand, st.players[0].melds, winTile, st.riichi[0], true, st.riichiFirstDraw[0]);
+        var fan = yaku.length >= 7 ? 13 : (yaku.length >= 4 ? 6 : (yaku.length >= 2 ? 3 : 1));
+        st.riichiFirstDraw[0] = false;
+        st.winInfo = { winner: 0, fan: fan, reasons: yaku,
+                       tile: winTile, type: "draw" };
+        st.msg = "You win · " + fan + " fan (" + yaku.length + " yaku)";
+        return;
+      }
+      /* 点手牌 → 放弃胡并出牌 */
+      var idx = Render.getHandTileAt(x, y, st);
+      if (idx >= 0 && idx < st.players[0].hand.length) {
+        Audio.discardSfx();
+        var disTile = st.players[0].hand[idx];
+        Core.discardTile(st, disTile);
+        return;
+      }
+      return;
+    }
+
+    /* 响应面板 */
+    if (st.mode === "waiting_response") {
+      var li = Render.layoutInfo();
+      var btnY = li.PANEL_BTN_Y;
+      var btnH = 28;
+      var btnX = 14;
+      var opts = st.options;
+      for (var i = 0; i < opts.length; i++) {
+        var label = opts[i].type.toUpperCase();
+        var bw = label.length * 8 + 22;
+        if (x >= btnX && x <= btnX + bw && y >= btnY && y <= btnY + btnH) {
+          Audio.uiClick();
+          Core.chooseAction(st, i);
+          if (opts[i].type === "chi") Audio.chiSfx();
+          else if (opts[i].type === "peng") Audio.pengSfx();
+          else if (opts[i].type === "gang") Audio.gangSfx();
+          else if (opts[i].type === "hu") Audio.huSfx();
+          return;
+        }
+        btnX += bw + 6;
+      }
+      var skipBW = 56;
+      if (x >= btnX && x <= btnX + skipBW && y >= btnY && y <= btnY + btnH) {
+        Audio.uiClick();
+        Core.decline(st);
+        return;
+      }
+      return;
+    }
+
+    /* 玩家出牌：单击选中，再次点击出牌 */
+    if (st.mode === "await_discard") {
+      var idx2 = Render.getHandTileAt(x, y, st);
+      if (idx2 >= 0 && idx2 < st.players[0].hand.length) {
+        if (st.selIdx === idx2) {
+          Audio.discardSfx();
+          var tile = st.players[0].hand[idx2];
+          st.selIdx = -1;
+          Core.discardTile(st, tile);
+        } else {
+          Audio.pickSfx();
+          st.selIdx = idx2;
+        }
+        return;
+      }
+    }
+  }
+
+  cv.addEventListener("click", function (e) {
+    handleTap(e.clientX, e.clientY);
+  });
+  cv.addEventListener("touchstart", function (e) {
+    if (!e.touches || e.touches.length === 0) return;
+    e.preventDefault();
+    handleTap(e.touches[0].clientX, e.touches[0].clientY);
+  }, { passive: false });
+
+  /* 键盘 */
+  addEventListener("keydown", function (e) {
+    Audio.init();
+    var rect = cv.getBoundingClientRect();
+    if (e.key === "Enter") {
+      handleTap(rect.left + rect.width / 2, rect.top + rect.height / 2);
+      return;
+    }
+    /* 响应面板快捷键 */
+    if (st.mode === "waiting_response" && st.options.length > 0) {
+      var li = Render.layoutInfo();
+      var btnY = li.PANEL_BTN_Y;
+      var btnX = 14;
+      var opts = st.options;
+      var found = -1;
+      var keyMap = { " ": "chi", "Alt": "peng", "Control": "gang", "z": "hu" };
+      var key = e.key.toLowerCase();
+      if (e.key === " ") key = " ";
+      if (keyMap[key]) {
+        for (var i = 0; i < opts.length; i++) {
+          if (opts[i].type === keyMap[key]) { found = i; break; }
+        }
+        if (found >= 0) {
+          e.preventDefault();
+          Audio.uiClick();
+          Core.chooseAction(st, found);
+          if (opts[found].type === "chi") Audio.chiSfx();
+          else if (opts[found].type === "peng") Audio.pengSfx();
+          else if (opts[found].type === "gang") Audio.gangSfx();
+          else if (opts[found].type === "hu") Audio.huSfx();
+          return;
+        }
+      }
+    }
+  });
+
+  /* 难度 */
+  var diffBtns = document.querySelectorAll("#diffSel button");
+  for (var i = 0; i < diffBtns.length; i++) {
+    (function (btn) {
+      btn.addEventListener("click", function () {
+        Audio.init(); Audio.uiClick();
+        var d = this.dataset.d;
+        if (Core.setDifficulty(st, d)) {
+          try { localStorage.setItem("mahjong_diff", d); } catch (e) {}
+          updateDiffButtons();
+        }
+      });
+    })(diffBtns[i]);
+  }
+
+  /* 静音 */
+  var muteBtn = document.getElementById("muteBtn");
+  muteBtn.addEventListener("click", function () {
+    var m = Audio.toggle();
+    this.textContent = m ? "♪̸" : "♪";
+    this.style.opacity = m ? "0.5" : "1";
+  });
+  if (Audio.isMuted()) {
+    muteBtn.textContent = "♪̸";
+    muteBtn.style.opacity = "0.5";
+  }
+
+  /* 游戏循环 */
+  var last = performance.now(), acc = 0, frameDt = 1/60;
+  var STEP_MS = 1000 / 60;
+  var prevHandLen = st.players[0].hand.length;
+  var prevHand = st.players[0].hand.slice();
+
+  /* 找出这一帧新摸进来的那张牌，以及它排序后的真实位置。
+     手牌在 core 里会被 sortHand 排序，所以新牌不一定在最后一位。 */
+  function findDrawnTile(prev, cur) {
+    var counts = {};
+    for (var i = 0; i < prev.length; i++) {
+      counts[prev[i]] = (counts[prev[i]] || 0) + 1;
+    }
+    for (var j = 0; j < cur.length; j++) {
+      var v = cur[j];
+      if (counts[v] > 0) { counts[v]--; }
+      else { return { tile: v, idx: j }; }
+    }
+    return null;
+  }
+
+  function loop(now) {
+    frameDt = Math.min((now - last) / 1000, 0.05); /* 实际帧间隔（秒），上限 50ms */
+    acc += now - last;
+    last = now;
+    while (acc >= STEP_MS) {
+      Core.update(st, STEP_MS);
+      acc -= STEP_MS;
+    }
+    /* 摸牌动画：手牌数量 +1 时触发 */
+    var curHand = st.players[0].hand;
+    if (curHand.length === prevHandLen + 1 &&
+        st.mode !== "await_donden" && st.mode !== "round_over" && st.mode !== "draw" &&
+        st.mode !== "menu") {
+      var li = Render.layoutInfo();
+      var drawn = findDrawnTile(prevHand, curHand);
+      /* 兜底：找不到时退回最后一张 */
+      var drawIdx = drawn ? drawn.idx : curHand.length - 1;
+      var drawTile = drawn ? drawn.tile : curHand[drawIdx];
+      /* 新摸的牌显示在最右槽位（不插进手牌里），动画就飞到那一格 */
+      var slot = curHand.length - 1;
+      Render.addAnim("draw",
+        [li.WALL_X, li.WALL_Y],
+        [li.HAND_X + slot * li.STRIDE, li.HAND_Y - 4],
+        400, { tile: drawTile, idx: drawIdx });
+      Audio.drawSfx();
+    }
+    prevHandLen = curHand.length;
+    prevHand = curHand.slice();
+    var t = now / 1000;
+    ctx.clearRect(0, 0, Core.W, Core.H);
+    Render.draw(ctx, st, t, frameDt);
+    requestAnimationFrame(loop);
+  }
+
+  requestAnimationFrame(loop);
+
+  /* 调试钩子：允许外部 eval 访问状态 */
+  if (typeof window !== "undefined") window.__game = { st: st, Core: Core, Render: Render };
+})();
+</script>
+</body>
+</html>

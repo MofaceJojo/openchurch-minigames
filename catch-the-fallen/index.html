@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+<title>Catch the Fallen · OpenChurch</title>
+<meta name="theme-color" content="#8ed4ff">
+<link rel="icon" href="../assets/openchurch-cross.png">
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  body { font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+    background:#8ed4ff; display:flex; flex-direction:column; align-items:center;
+    min-height:100vh; padding:8px; touch-action:none; overflow:hidden; }
+  #topbar { display:flex; align-items:center; gap:10px; margin-bottom:6px; }
+  .back { font-size:13px; text-decoration:none; color:#2a5a80; border:1.5px solid #6aa8d0; border-radius:12px; padding:5px 12px; background:rgba(255,255,255,.35); }
+  .back:hover { color:#0e3a5c; border-color:#0e3a5c; }
+  #muteBtn { background:none; border:1.5px solid #6aa8d0; border-radius:12px; padding:5px 10px; color:#2a5a80; font-size:16px; cursor:pointer; }
+  #wrap { position:relative; }
+  canvas { display:block; border-radius:10px; box-shadow:0 6px 20px rgba(30,70,100,.35);
+    image-rendering:pixelated; image-rendering:crisp-edges; }
+  #diffSel { display:flex; gap:4px; margin:6px 0; }
+  #diffSel button { font-size:11px; padding:4px 10px; border:1px solid #6aa8d0; border-radius:10px;
+    background:rgba(255,255,255,.4); color:#2a5a80; cursor:pointer; }
+  #diffSel button.active { background:#0e6eb8; color:#fff; border-color:#0e6eb8; }
+  #pad { margin-top:8px; display:none; }
+  @media (pointer:coarse){ #pad{display:flex;} }
+  #pad { gap:12px; }
+  .pb { width:86px; height:56px; background:#0e6eb8; border:none; border-radius:14px; font-size:26px; color:#fff;
+    box-shadow:0 3px 0 #08507f; cursor:pointer; }
+  .pb:active { transform:translateY(2px); box-shadow:0 1px 0 #08507f; }
+</style>
+</head>
+<body>
+
+<div id="topbar">
+  <a class="back" href="../">← All games</a>
+  <button id="muteBtn">♪</button>
+</div>
+
+<div id="diffSel">
+  <button data-d="gentle">Gentle</button>
+  <button data-d="normal" class="active">Normal</button>
+  <button data-d="brave">Brave</button>
+</div>
+
+<div id="wrap">
+  <canvas id="cv"></canvas>
+</div>
+
+<div id="pad">
+  <button class="pb" data-k="left">◀</button>
+  <button class="pb" data-k="right">▶</button>
+</div>
+
+<script src="core.js?v=1"></script>
+<script src="render.js?v=1"></script>
+<script src="audio.js?v=1"></script>
+<script>
+"use strict";
+(function () {
+  var cv = document.getElementById("cv");
+  var SS = 2;
+  cv.width = Core.W * SS;
+  cv.height = Core.H * SS;
+  cv.style.width = Core.W + "px";
+  cv.style.height = Core.H + "px";
+  var ctx = cv.getContext("2d");
+  ctx.scale(SS, SS);
+
+  var savedLevel = 1;
+  try { savedLevel = parseInt(localStorage.getItem("ctf_best")) || 1; } catch (e) {}
+  var savedDiff = "normal";
+  try { savedDiff = localStorage.getItem("ctf_diff") || "normal"; } catch (e) {}
+
+  var st = Core.create(savedLevel, savedDiff);
+  Audio.loadMuted();
+  updateDiffButtons();
+
+  function updateDiffButtons() {
+    var btns = document.querySelectorAll("#diffSel button");
+    for (var i = 0; i < btns.length; i++) {
+      btns[i].classList.toggle("active", btns[i].dataset.d === st.diff);
+    }
+  }
+
+  /* === input === */
+  var keys = {};
+  addEventListener("keydown", function(e) {
+    var k = e.key.toLowerCase();
+    if (["arrowleft","arrowright"].indexOf(k) >= 0) e.preventDefault();
+    keys[k] = true;
+    if (k === "arrowleft" || k === "a") Core.setPadDir(st, "left");
+    else if (k === "arrowright" || k === "d") Core.setPadDir(st, "right");
+    else if (k === "enter") handleTap();
+  });
+  addEventListener("keyup", function(e) {
+    var k = e.key.toLowerCase();
+    keys[k] = false;
+    if (k === "arrowleft" || k === "a" || k === "arrowright" || k === "d") Core.setPadDir(st, null);
+  });
+
+  var padBtns = document.querySelectorAll(".pb[data-k]");
+  for (var i = 0; i < padBtns.length; i++) {
+    (function(btn) {
+      btn.addEventListener("touchstart", function(e) { e.preventDefault(); Audio.init(); Core.setPadDir(st, btn.dataset.k); });
+      btn.addEventListener("touchend", function(e) { e.preventDefault(); Core.setPadDir(st, null); });
+      btn.addEventListener("mousedown", function(e) { Audio.init(); Core.setPadDir(st, btn.dataset.k); });
+      btn.addEventListener("mouseup", function(e) { Core.setPadDir(st, null); });
+    })(padBtns[i]);
+  }
+
+  function checkKeyboard() {
+    if (st.mode !== "play") return;
+    if (keys["arrowleft"] || keys["a"]) Core.setPadDir(st, "left");
+    else if (keys["arrowright"] || keys["d"]) Core.setPadDir(st, "right");
+  }
+
+  cv.addEventListener("click", function() { Audio.init(); handleTap(); });
+
+  function handleTap() {
+    Audio.uiClick();
+    if (st.mode === "menu" || st.mode === "intro" || st.mode === "lose" || st.mode === "win") {
+      Core.advance(st);
+    }
+  }
+
+  /* difficulty */
+  var diffBtns = document.querySelectorAll("#diffSel button");
+  for (var j = 0; j < diffBtns.length; j++) {
+    diffBtns[j].addEventListener("click", function() {
+      Audio.init(); Audio.uiClick();
+      var d = this.dataset.d;
+      if (Core.setDifficulty(st, d)) {
+        try { localStorage.setItem("ctf_diff", d); } catch (e) {}
+        updateDiffButtons();
+      }
+    });
+  }
+
+  /* mute */
+  document.getElementById("muteBtn").addEventListener("click", function() {
+    var m = Audio.toggle();
+    this.textContent = m ? "♪̸" : "♪";
+    this.style.opacity = m ? "0.5" : "1";
+  });
+  if (Audio.isMuted()) {
+    var mb = document.getElementById("muteBtn");
+    mb.textContent = "♪̸";
+    mb.style.opacity = "0.5";
+  }
+
+  /* === game loop === */
+  var last = performance.now(), acc = 0;
+  var STEP_MS = 1000 / 60;
+
+  function loop(now) {
+    acc += now - last;
+    last = now;
+    checkKeyboard();
+
+    while (acc >= STEP_MS) {
+      var events = Core.update(st, STEP_MS);
+      if (events) {
+        for (var i = 0; i < events.length; i++) {
+          var ev = events[i];
+          if (ev.type === "catch") Audio.catchSfx();
+          else if (ev.type === "miss") Audio.missSfx();
+          else if (ev.type === "levelClear") Audio.levelClear();
+          else if (ev.type === "gameOver") Audio.gameOver();
+        }
+      }
+      acc -= STEP_MS;
+    }
+
+    if (st.mode === "intro") {
+      try { localStorage.setItem("ctf_best", st.best); } catch (e) {}
+    }
+
+    var time = (now / 1000);
+    ctx.clearRect(0, 0, Core.W, Core.H);
+    Render.draw(ctx, st, time, acc);
+
+    requestAnimationFrame(loop);
+  }
+
+  requestAnimationFrame(loop);
+})();
+</script>
+</body>
+</html>
