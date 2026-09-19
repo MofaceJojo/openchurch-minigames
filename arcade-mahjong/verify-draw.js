@@ -4,10 +4,14 @@
  *
  * 期望：
  *   - 摸牌前 / 动画中：槽位 0..12 显示那 13 张牌，槽位 13 为空
- *   - 动画结束后：槽位 13 出现新摸的牌（上抬 + 金框）
+ *   - 动画结束后：槽位 13 出现新摸的牌（上抬 + 青框）
  *   - 槽位 0..12 在"摸牌前"和"动画中"必须逐像素一致（不能因为插入而抖动/移位）
  *
  * 旧代码把新牌按真实索引（0）插进手牌，槽位 0 会被重复绘制 → 本测试失败。
+ *
+ * ⚠️ 本测试绕过 core 直接改 hand，所以必须自己维护 st.lastDrawnTile ——
+ *    渲染侧"哪张是摸到的牌"只有一个权威来源：core 的 lastDrawnTile
+ *    （见 render.js drawnRealIdxFromState）。不设它 → 渲染侧不知道要重排。
  */
 "use strict";
 
@@ -94,15 +98,21 @@ async function run() {
     st.players[0].hand = [40, 44, 48, 52, 56, 60, 64, 68, 72, 76, 80, 84, 88];
     window.__game.Core.sortHand(st.players[0].hand);
     st.selIdx = -1;
+    st.lastDrawnTile = null;   /* 这一巡还没摸牌 → 渲染侧不重排（原序） */
   });
   await sleep(150);                       /* 让主循环的 prevHand 快照同步 */
   await grab("before");
 
-  /* ---- 摸到一张最小的牌 → 排序后落在 index 0，但显示应在最右 ---- */
+  /* ---- 摸到一张最小的牌 → 排序后落在 index 0，但显示应在最右 ----
+     ⚠️ 必须同时设 st.lastDrawnTile —— 这是 core 的权威字段，渲染侧
+     （render.js drawnRealIdxFromState）只认它。本测试绕过了 core 的
+     drawForPlayer，所以要自己维护这个不变量，否则渲染侧不知道该把哪张
+     排到最右槽位。 */
   await page.evaluate(function () {
     var st = window.__game.st;
     st.players[0].hand.push(4);
     window.__game.Core.sortHand(st.players[0].hand);
+    st.lastDrawnTile = 4;
   });
   await sleep(70);                        /* 动画进行中（牌还在飞） */
   await grab("mid");
@@ -171,8 +181,11 @@ async function run() {
     "    r = a[y0:y1, x0:x1]\n" +
     "    R,G,B = r[:,:,0], r[:,:,1], r[:,:,2]\n" +
     "    ivory = float(((R>200)&(G>190)&(B>160)).mean())\n" +
-    "    green = float(((G>R+25)&(G>B+25)).mean())\n" +
-    "    return 'tile' if ivory > 0.4 else ('empty' if green > 0.5 else 'other')\n" +
+    "    # 空格 = 毡布色：绿通道占优且不亮。\n" +
+    "    # 不要用绝对亮度/绝对绿量做阈值 —— 之前写的是 (G>R+25)&(G>B+25)，\n" +
+    "    # 换成深墨绿毡布后 G-B 只有 26，刚好卡在阈值上直接失效。\n" +
+    "    felt = float(((G>=R)&(G>=B)&(G<200)).mean())\n" +
+    "    return 'tile' if ivory > 0.4 else ('empty' if felt > 0.6 else 'other')\n" +
     "res = {}\n" +
     "for n, a in imgs.items():\n" +
     "    res[n] = [kind_of(a, i) for i in range(14)]\n" +

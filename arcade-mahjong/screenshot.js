@@ -160,6 +160,23 @@ async function run() {
   await page.screenshot({ path: path.join(OUT_DIR, "10-draw.png") });
   console.log("shot 10-draw");
 
+  // CPU 和牌展示（ai_win）—— 亮出 CPU 手牌 + 和牌张 + 役种
+  await page.evaluate(function () {
+    var st = window.__game.st;
+    st.players[1].hand = [0, 1, 2, 4, 5, 6, 8, 9, 10, 12, 13, 14, 16, 17];
+    st.players[1].melds = [];
+    st.winInfo = {
+      winner: 1, fan: 6, type: "draw", tile: 17,
+      reasons: ["Tanyao (All Simples)", "Iipeikou (Pure Double Chow)",
+                "Pinfu (No-points Hand)", "Menzen Tsumo (Pure Hand Self-draw)"]
+    };
+    st.mode = "ai_win";
+    st.aiTimer = 9999;
+  });
+  await sleep(300);
+  await page.screenshot({ path: path.join(OUT_DIR, "11-cpu-win-reveal.png") });
+  console.log("shot 11-cpu-win-reveal");
+
   await browser.close();
   console.log("\nAll screenshots saved to", OUT_DIR);
 }

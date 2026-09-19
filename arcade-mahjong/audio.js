@@ -110,14 +110,24 @@ var Audio = (function () {
     });
   }
 
-  /* 流局：平淡两音 */
-  function drawSfx() {
+  /* 流局：平淡两音。
+     注意：这里原来也叫 drawSfx，和上面的"摸牌咔哒"重名 —— 后定义的会静默覆盖前者，
+     导致摸牌一直在放流局的声音。改名 exhaustSfx 区分开。 */
+  function exhaustSfx() {
     tone(330, 0.2, "sine", 0.08);
     setTimeout(function () { tone(330, 0.2, "sine", 0.06); }, 250);
   }
 
   /* UI 点击 */
   function uiClick() { tone(660, 0.03, "square", 0.06); }
+
+  /* 操作被拒绝（立直中打了非摸牌 / 不是自己的回合）：
+     两声短促低音，和"成功"的咔哒声明显区分开。
+     规则性的拒绝以前是完全静默的，玩家只会以为游戏卡了。 */
+  function denySfx() {
+    tone(150, 0.07, "square", 0.09);
+    setTimeout(function () { tone(110, 0.1, "square", 0.09); }, 80);
+  }
 
   /* 发牌：一串咔哒 */
   function dealSfx() {
@@ -131,8 +141,8 @@ var Audio = (function () {
     isMuted: function () { return muted; },
     discardSfx: discardSfx, drawSfx: drawSfx, pickSfx: pickSfx,
     chiSfx: chiSfx, pengSfx: pengSfx, gangSfx: gangSfx,
-    huSfx: huSfx, loseSfx: loseSfx, drawSfx: drawSfx,
-    uiClick: uiClick, dealSfx: dealSfx
+    huSfx: huSfx, loseSfx: loseSfx, exhaustSfx: exhaustSfx,
+    uiClick: uiClick, dealSfx: dealSfx, denySfx: denySfx
   };
 })();
 

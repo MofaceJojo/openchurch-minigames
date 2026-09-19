@@ -4,28 +4,36 @@
 <meta charset="utf-8" data-page-node-id="CBT8egNzIhv4gDOjjeuMmH">
 <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no" data-page-node-id="bmXQ4Ww5KAbSPhGGBhSi7O">
 <title>Arcade Mahjong · OpenChurch</title>
-<meta name="theme-color" content="#6b4a1e" data-page-node-id="h9zOYyxsBPXruwTakRlI0Q">
+<meta name="theme-color" content="#05080b" data-page-node-id="h9zOYyxsBPXruwTakRlI0Q">
 <link rel="icon" href="../assets/openchurch-cross.png" data-page-node-id="pJOzWxtn66BIDc6nXFFBlw">
 <style>
   * { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
   html, body { height:100%; overflow:hidden; }
   body { font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
-    background:#6b4a1e; display:flex; flex-direction:column; align-items:stretch;
+    background:radial-gradient(circle at 50% 0%, #131c22 0%, #070b0e 55%, #03050700 100%), #05080b;
+    display:flex; flex-direction:column; align-items:stretch;
     touch-action:none; }
-  #topbar { display:flex; align-items:center; gap:8px; padding:6px 10px;
-    background:rgba(0,0,0,.15); flex-shrink:0; }
-  .back { font-size:12px; text-decoration:none; color:#3d2a10; border:1.5px solid #8a6a35;
-    border-radius:10px; padding:4px 10px; background:rgba(255,240,200,.35); flex-shrink:0; }
-  .back:hover { color:#fff; border-color:#fff; }
-  #muteBtn { background:none; border:1.5px solid #8a6a35; border-radius:10px; padding:4px 8px;
-    color:#3d2a10; font-size:14px; cursor:pointer; flex-shrink:0; }
-  #diffSel { display:flex; gap:3px; margin-left:auto; }
-  #diffSel button { font-size:10px; padding:3px 8px; border:1px solid #8a6a35; border-radius:8px;
-    background:rgba(255,240,200,.4); color:#3d2a10; cursor:pointer; }
-  #diffSel button.active { background:#c42020; color:#fff; border-color:#c42020; }
+  #topbar { display:flex; align-items:center; gap:8px; padding:7px 10px 4px;
+    flex-shrink:0; }
+  .back { font-size:12px; text-decoration:none; color:#a8c4d4; border:1.5px solid #2c4855;
+    border-radius:9px; padding:4px 10px; background:rgba(12,24,30,.75); flex-shrink:0;
+    transition:color .15s, border-color .15s, box-shadow .15s; }
+  .back:hover { color:#fff; border-color:#3ce0ff; box-shadow:0 0 10px rgba(60,224,255,.35); }
+  #muteBtn { background:rgba(12,24,30,.75); border:1.5px solid #2c4855; border-radius:9px;
+    padding:4px 8px; color:#a8c4d4; font-size:14px; cursor:pointer; flex-shrink:0;
+    transition:color .15s, border-color .15s; }
+  #muteBtn:hover { color:#fff; border-color:#3ce0ff; }
+  #diffSel { display:flex; justify-content:flex-end; gap:4px; padding:0 10px 6px;
+    flex-shrink:0; }
+  #diffSel button { font-size:10px; font-weight:500; letter-spacing:.4px; padding:4px 10px;
+    border:1px solid #2c4855; border-radius:7px; background:rgba(12,24,30,.75);
+    color:#8fa8b8; cursor:pointer; transition:color .15s, border-color .15s, background .15s; }
+  #diffSel button:hover { color:#dff2fb; border-color:#3ce0ff; }
+  #diffSel button.active { background:rgba(255,176,32,.16); color:#ffb020;
+    border-color:#ffb020; box-shadow:0 0 10px rgba(255,176,32,.35); }
   #wrap { flex:1; display:flex; align-items:center; justify-content:center;
     width:100%; overflow:hidden; }
-  canvas { display:block; box-shadow:0 4px 16px rgba(30,20,10,.5);
+  canvas { display:block; box-shadow:0 0 26px rgba(60,224,255,.16), 0 6px 20px rgba(0,0,0,.75);
     image-rendering:pixelated; image-rendering:crisp-edges; cursor:pointer; }
 </style>
 </head>
@@ -46,9 +54,9 @@
   <canvas id="cv" data-page-node-id="JOSEtSEQlvv1BxZ0WzW5Kc"></canvas>
 </div>
 
-<script src="core.js?v=4"></script>
-<script src="render.js?v=4"></script>
-<script src="audio.js?v=4"></script>
+<script src="core.js?v=9"></script>
+<script src="render.js?v=9"></script>
+<script src="audio.js?v=9"></script>
 <script>
 "use strict";
 (function () {
@@ -60,8 +68,12 @@
   ctx.scale(SS, SS);
 
   function resizeCanvas() {
+    /* 可用高度要同时扣掉 topbar 和难度按钮那一行 ——
+       原来只减了 topbar，导致画布比容器高，顶部的 HUD 被裁掉一截。 */
     var bar = document.getElementById("topbar");
-    var availH = window.innerHeight - bar.offsetHeight;
+    var diff = document.getElementById("diffSel");
+    var used = bar.offsetHeight + (diff ? diff.offsetHeight : 0);
+    var availH = window.innerHeight - used;
     var availW = window.innerWidth;
     var scale = Math.min(availW / Core.W, availH / Core.H);
     cv.style.width = Math.floor(Core.W * scale) + "px";
@@ -84,6 +96,31 @@
     }
   }
 
+  /* 摸到的那张牌的**真实手牌索引**。
+     直接问 core，不要自己从渲染顺序推 —— 渲染顺序和 core 都源自
+     st.lastDrawnTile，但只有 core 是权威（见 render.js drawnRealIdxFromState）。 */
+  function drawnRealIdx() {
+    return Core.drawnTileIndex(st, 0);
+  }
+
+  /* 出牌被规则拒绝时的统一反馈。
+     以前这里是静默 return：牌抬起来（选中态）→ 再点毫无反应 → 看起来就是
+     "这张牌直立着但怎么点都打不出去"。现在必须满足三件事：
+       1. 有声音（和成功的咔哒声区分开）
+       2. 有文字提示说明原因
+       3. 把选中态挪到"唯一能打的那张牌"上 —— 抬起的那张牌永远是可打的
+     绝不在这里清 selIdx，否则玩家连"我选中的是哪张"都看不到了。 */
+  function rejectDiscard(reason) {
+    Audio.denySfx();
+    if (reason === "riichi_tsumogiri") {
+      var dr = drawnRealIdx();
+      if (dr >= 0) st.selIdx = dr;
+      Core.setHint(st, "RIICHI · discard the drawn tile", 2200, dr);
+    } else {
+      Core.setHint(st, "Not your turn", 1400, -1);
+    }
+  }
+
   function handleTap(clientX, clientY) {
     Audio.init();
     var rect = cv.getBoundingClientRect();
@@ -95,6 +132,12 @@
       Audio.uiClick();
       Core.advance(st);
       Audio.dealSfx();
+      return;
+    }
+
+    /* CPU 和牌展示：点一下跳过停顿，直接进结算 */
+    if (st.mode === "ai_win") {
+      st.aiTimer = 1;
       return;
     }
 
@@ -110,7 +153,7 @@
           Audio.loseSfx();
         }
       } else {
-        Audio.drawSfx();
+        Audio.exhaustSfx();
       }
       Audio.uiClick();
       Core.advance(st);
@@ -171,8 +214,12 @@
       if (x >= li3.RIICHI_BTN_X && x <= li3.RIICHI_BTN_X + li3.RIICHI_BTN_W &&
           y >= li3.RIICHI_BTN_Y && y <= li3.RIICHI_BTN_Y + li3.RIICHI_BTN_H) {
         Audio.uiClick();
-        Core.declareRiichi(st, 0);
-        st.mode = "await_discard";
+        if (Core.declareRiichi(st, 0)) {
+          st.mode = "await_discard";
+          /* core 已把选中态挪到摸到的那张牌上；这里再补一条提示，
+             免得玩家以为立直后还能随便打。 */
+          Core.setHint(st, "RIICHI · discard the drawn tile", 2600, drawnRealIdx());
+        }
         return;
       }
     }
@@ -198,8 +245,10 @@
       /* 点手牌 → 放弃胡并出牌 */
       var idx = Render.getHandTileAt(x, y, st);
       if (idx >= 0 && idx < st.players[0].hand.length) {
-        Audio.discardSfx();
         var disTile = st.players[0].hand[idx];
+        var whyHu = Core.discardBlockReason(st, disTile);
+        if (whyHu) { rejectDiscard(whyHu); return; }
+        Audio.discardSfx();
         Core.discardTile(st, disTile);
         return;
       }
@@ -240,9 +289,15 @@
     if (st.mode === "await_discard") {
       var idx2 = Render.getHandTileAt(x, y, st);
       if (idx2 >= 0 && idx2 < st.players[0].hand.length) {
+        var tile = st.players[0].hand[idx2];
+        /* 立直中只有摸到的那张牌能打。点别的牌时**不要**先把它抬起来 ——
+           "抬起却打不出去"正是玩家看到的那张"直立打不出去"的牌。
+           直接给反馈，并把选中态挪到唯一合法的那张牌上。 */
+        var why = Core.discardBlockReason(st, tile);
+        if (why) { rejectDiscard(why); return; }
         if (st.selIdx === idx2) {
+          /* 只有真的打出去了才清选中态（原来先清再调用，被拒绝时选中态会凭空消失） */
           Audio.discardSfx();
-          var tile = st.players[0].hand[idx2];
           st.selIdx = -1;
           Core.discardTile(st, tile);
         } else {
@@ -331,6 +386,9 @@
   var STEP_MS = 1000 / 60;
   var prevHandLen = st.players[0].hand.length;
   var prevHand = st.players[0].hand.slice();
+  /* CPU 侧的手牌数 / 牌河数，用来触发 CPU 的摸牌与打牌动画 */
+  var prevCpuHandLen = st.players[1].hand.length;
+  var prevCpuDisLen = st.players[1].discards.length;
 
   /* 找出这一帧新摸进来的那张牌，以及它排序后的真实位置。
      手牌在 core 里会被 sortHand 排序，所以新牌不一定在最后一位。 */
@@ -362,8 +420,11 @@
         st.mode !== "menu") {
       var li = Render.layoutInfo();
       var drawn = findDrawnTile(prevHand, curHand);
-      /* 兜底：找不到时退回最后一张 */
-      var drawIdx = drawn ? drawn.idx : curHand.length - 1;
+      /* 索引一律取 core 的权威值。findDrawnTile 给的是"插入位置"，
+         摸到手里已有同值的牌时会和 core 的 indexOf 位置分歧，
+         两边不一致就会让"点摸到的牌"失效（见 render.js drawnRealIdxFromState）。 */
+      var drawIdx = Core.drawnTileIndex(st, 0);
+      if (drawIdx < 0) drawIdx = drawn ? drawn.idx : curHand.length - 1;
       var drawTile = drawn ? drawn.tile : curHand[drawIdx];
       /* 新摸的牌显示在最右槽位（不插进手牌里），动画就飞到那一格 */
       var slot = curHand.length - 1;
@@ -375,6 +436,36 @@
     }
     prevHandLen = curHand.length;
     prevHand = curHand.slice();
+
+    /* CPU 摸牌动画：CPU 进入 ai_turn 的 draw 段、手牌 +1 时触发。
+       这样玩家能看见 CPU 从牌山摸牌，而不是一帧之内就出结果。 */
+    var curCpu = st.players[1].hand;
+    if (curCpu.length === prevCpuHandLen + 1 && st.mode === "ai_turn") {
+      var liC = Render.layoutInfo();
+      var cSlot = curCpu.length - 1;
+      Render.addAnim("aiDraw",
+        [liC.WALL_X, liC.WALL_Y],
+        [Render.cpuHandSlotX(st, cSlot), liC.CPU_HAND_Y],
+        380, { tile: curCpu[cSlot], idx: cSlot });
+      Audio.drawSfx();
+    }
+    prevCpuHandLen = curCpu.length;
+
+    /* CPU 打牌动画：CPU 牌河 +1 时触发，牌从 CPU 手牌区滑进牌河 */
+    var curCpuDis = st.players[1].discards;
+    if (curCpuDis.length === prevCpuDisLen + 1 && st.mode !== "menu") {
+      var liD = Render.layoutInfo();
+      var dIdx = curCpuDis.length - 1;
+      var dPos = Render.cpuDiscardSlotPos(dIdx);
+      var cMid = Math.floor(st.players[1].hand.length / 2);
+      Render.addAnim("aiDiscard",
+        [Render.cpuHandSlotX(st, cMid), liD.CPU_HAND_Y],
+        [dPos.x, dPos.y],
+        320, { tile: curCpuDis[dIdx], idx: dIdx });
+      Audio.discardSfx();
+    }
+    prevCpuDisLen = curCpuDis.length;
+
     var t = now / 1000;
     ctx.clearRect(0, 0, Core.W, Core.H);
     Render.draw(ctx, st, t, frameDt);

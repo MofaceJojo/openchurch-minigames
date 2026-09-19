@@ -9,28 +9,53 @@ var Core = (function () {
   /* ===== 画布 ===== */
   var W = 360, H = 500, HUD = 22;
 
-  /* ===== 三档难度 ===== */
+  /* ===== 三档难度 =====
+     wall = 发完起手后牌山保留的张数。
+     全副 136 张全部保留（役种完整），只裁牌山，因为本作只有 2 人：
+     不裁的话每人要摸 ~55 巡（四人麻将只摸 ~21 巡），一局过长，
+     而且"海底捞月"（摸到最后一张自摸）永远碰不到。
+     44 张 → 每人 22 巡，正好对齐四人街机麻将的节奏。 */
   var DIFFS = {
     gentle: { id:"gentle", name:"Gentle", blurb:"Leisurely CPU",
-              aggro:0.25, pungOnly:0.25, discardSafety:0.85 },
+              aggro:0.25, pungOnly:0.25, discardSafety:0.85, wall:52 },
     normal: { id:"normal", name:"Normal", blurb:"Standard rules",
-              aggro:0.60, pungOnly:0.60, discardSafety:0.55 },
+              aggro:0.60, pungOnly:0.60, discardSafety:0.55, wall:44 },
     brave:  { id:"brave",  name:"Brave",  blurb:"Sharp CPU",
-              aggro:0.95, pungOnly:0.95, discardSafety:0.15 }
+              aggro:0.95, pungOnly:0.95, discardSafety:0.15, wall:36 }
   };
   var DIFF_IDS = ["gentle","normal","brave"];
 
+  /* ===== AI 回合展示节奏（帧，60fps） =====
+     原来 AI 的摸牌与打牌在同一帧内瞬间完成，玩家只看到结果、看不到过程。
+     现在拆成三段：draw（摸牌）→ think（思考）→ discard（打牌）。
+     外壳在 draw 段补"牌从牌山飞到手牌"的动画，在打牌后补"牌飞进牌河"的动画。 */
+  var AI_DRAW_FRAMES  = 26;   /* ≈430ms —— 够飞牌动画走完 */
+  var AI_THINK_FRAMES = 34;   /* ≈570ms —— 看得见 CPU 在思考 */
+  var AI_WIN_FRAMES   = 80;   /* ≈1.3s —— 和牌展示停顿，之后才弹结算面板 */
+
+  /* 进入 AI 回合：phase = "draw"（刚摸完牌）或 "think"（吃碰后没摸牌） */
+  function beginAiTurn(st, phase) {
+    st.mode = "ai_turn";
+    st.aiPhase = phase;
+    st.aiTimer = (phase === "draw") ? AI_DRAW_FRAMES : AI_THINK_FRAMES;
+  }
+
+  /* 三元换牌次数。菜单文案引用这个常量，避免两边写死不同的数字
+     （曾出现菜单写 5 次、实际只给 3 次的不一致）。 */
+  var DON_DEN_COUNT = 3;
+
   /* ===== 牌编码 0..135 ===== */
-  var ZI_NAMES = ["东","南","西","北","中","发","白"];
+  var ZI_NAMES = ["東","南","西","北","中","發","白"];
   var SUITS = ["wan","tiao","tong","zi"];
 
   function tileKind(n)   { return n >>> 2; }
   function kindSuit(k)   { return k < 27 ? (k < 9 ? 0 : (k < 18 ? 1 : 2)) : 3; }
   function kindRank(k)   { return k < 27 ? (k % 9) + 1 : k - 27; }
   function kindName(k)   {
+    /* 与牌面保持一致用繁体（牌面画的是「萬」） */
     var s = kindSuit(k), r = kindRank(k);
-    if (s === 0) return r + "万";
-    if (s === 1) return r + "条";
+    if (s === 0) return r + "萬";
+    if (s === 1) return r + "條";
     if (s === 2) return r + "筒";
     return ZI_NAMES[r];
   }
@@ -460,6 +485,7 @@ var Core = (function () {
       pungOnly: DIFFS[d].pungOnly,
       discardSafety: DIFFS[d].discardSafety,
       deck: [],
+      wallSize: DIFFS[d].wall,
       players: [
         newPlayer("You", true),
         newPlayer("CPU", false)
@@ -472,7 +498,14 @@ var Core = (function () {
       winInfo: null,
       msg: "",
       selIdx: -1,
-      cpuThinking: 0,
+      /* 一次性提示（toast）。render 会把它画在牌桌中段，update 里倒计时归零。
+         st.msg 是个"死"字段 —— render.js 从来没读过它，所以规则性的拒绝
+         在画面上完全静默；hint 才是真正会被显示出来的通道。 */
+      hint: "",
+      hintT: 0,
+      hintTile: -1,
+      aiPhase: "",
+      aiTimer: 0,
       lastTileDraw: false,
       /* 本回合摸到的那张牌（牌值）。手牌是排序的，所以"摸到的牌"不一定在最后一位，
          凡是"打出摸到的牌 / 用摸到的牌和牌"的逻辑都必须用它，不能用 hand[length-1]。
@@ -501,14 +534,21 @@ var Core = (function () {
       for (var k = 0; k < 13; k++) st.players[j].hand.push(st.deck.pop());
     }
     for (var j2 = 0; j2 < 2; j2++) sortHand(st.players[j2].hand);
+    /* 裁牌山：只留 DIFFS[diff].wall 张（见 DIFFS 注释）。
+       deck.pop() 从尾部取牌，所以保留尾部这一段。 */
+    st.wallSize = DIFFS[st.diff].wall;
+    if (st.deck.length > st.wallSize) {
+      st.deck = st.deck.slice(st.deck.length - st.wallSize);
+    }
     st.turn = st.dealer;
     st.lastDiscard = null;
     st.options = [];
     st.winInfo = null;
     st.msg = "";
     st.selIdx = -1;
-    st.cpuThinking = 0;
-    st.donDenCount = 3;
+    st.aiPhase = "";
+    st.aiTimer = 0;
+    st.donDenCount = DON_DEN_COUNT;
     st.dondenSelSet = [];         /* 新一局清空换牌选中（旧字段 donDenSel 已废弃） */
     st.riichi = [false, false];
     st.riichiFirstDraw = [false, false];
@@ -540,32 +580,35 @@ var Core = (function () {
         if (p.isHuman) {
           st.mode = "await_hu_choice";
           return true;
-        } else {
-          st.mode = "ai_turn";
-          st.cpuThinking = 30;
+        }
+        /* AI 立直自摸：先走展示流程，aiTurn 里再揭晓 */
+        beginAiTurn(st, "draw");
+        return true;
+      }
+      if (p.isHuman) {
+        /* 玩家立直：强制摸切，本来就没有选择余地，直接打出 */
+        var idx = p.hand.indexOf(t);
+        if (idx >= 0) {
+          p.hand.splice(idx, 1);
+          p.discards.push(t);
+          sortHand(p.hand);
+          st.lastDiscard = { tile: t, fromPlayer: st.turn };
+          st.riichiFirstDraw[st.turn] = false;
+          st.selIdx = -1;
+          handleAfterDiscard(st);
           return true;
         }
       }
-      /* 否则自动打出摸到的牌 */
-      var idx = p.hand.indexOf(t);
-      if (idx >= 0) {
-        p.hand.splice(idx, 1);
-        p.discards.push(t);
-        sortHand(p.hand);
-        st.lastDiscard = { tile: t, fromPlayer: st.turn };
-        st.riichiFirstDraw[st.turn] = false;
-        st.selIdx = -1;
-        handleAfterDiscard(st);
-        return true;
-      }
+      /* AI 立直：不要在这里瞬间摸切，交给 aiTurn 在展示完之后处理 */
+      beginAiTurn(st, "draw");
+      return true;
     }
     if (p.isHuman) {
       var canW = canWinFull(p.hand, p.melds, st.riichi[st.turn], true,
                             st.riichiFirstDraw[st.turn], lastTileDraw, t);
       st.mode = canW ? "await_hu_choice" : "await_discard";
     } else {
-      st.mode = "ai_turn";
-      st.cpuThinking = 30;
+      beginAiTurn(st, "draw");
     }
     return true;
   }
@@ -663,6 +706,11 @@ var Core = (function () {
     var p = st.players[pid];
     st.riichi[pid] = true;
     st.riichiFirstDraw[pid] = true;
+    /* 立直后只能打摸到的那张牌 —— 直接把选中态挪到那张牌上。
+       否则"按立直之前就选中好的那张牌"会一直保持抬起+金光的选中态，
+       而它恰恰是非法出牌：牌直立着、怎么点都打不出去。
+       （selIdx 只描述玩家 0 的手牌，AI 立直时不能碰它。） */
+    if (pid === 0) st.selIdx = p.hand.indexOf(drawnTileOf(st, p));
     st.msg = "Riichi!";
     return true;
   }
@@ -742,7 +790,13 @@ var Core = (function () {
     st.riichiFirstDraw[pid] = false;
     st.winInfo = { winner: pid, fan: fan, reasons: yaku,
                    tile: tile, type: "discard" };
-    st.mode = "round_over";
+    /* 玩家自己点 HU 立刻结算；CPU 荣和先停顿展示，别一帧跳过去 */
+    if (p.isHuman) {
+      st.mode = "round_over";
+    } else {
+      st.mode = "ai_win";
+      st.aiTimer = AI_WIN_FRAMES;
+    }
     st.msg = p.name + " wins · " + fan + " fan (" + yaku.length + " yaku)";
   }
 
@@ -755,8 +809,8 @@ var Core = (function () {
     st.lastDiscard = null;
     st.options = [];
     st.lastDrawnTile = null;      /* 吃碰没有摸牌 */
-    st.mode = p.isHuman ? "await_discard" : "ai_turn";
-    if (!p.isHuman) st.cpuThinking = 30;
+    if (p.isHuman) st.mode = "await_discard";
+    else beginAiTurn(st, "think");   /* 没摸牌 → 直接从"思考"开始展示 */
   }
 
   function doGang(st, pid, tile) {
@@ -779,8 +833,8 @@ var Core = (function () {
     st.lastDiscard = null;
     st.options = [];
     st.lastDrawnTile = null;      /* 吃碰没有摸牌 */
-    st.mode = p.isHuman ? "await_discard" : "ai_turn";
-    if (!p.isHuman) st.cpuThinking = 30;
+    if (p.isHuman) st.mode = "await_discard";
+    else beginAiTurn(st, "think");   /* 没摸牌 → 直接从"思考"开始展示 */
   }
 
   function removeKind(hand, k, n) {
@@ -798,17 +852,53 @@ var Core = (function () {
   /* =========================================================
      玩家 API
      ========================================================= */
-  function discardTile(st, tile) {
-    if (st.mode === "await_hu_choice") {
-      st.mode = "await_discard";
-    }
-    if (st.mode !== "await_discard") return false;
+  /* =========================================================
+     出牌合法性
+     ========================================================= */
+  /* 为什么这张牌现在打不出去？
+     返回 null = 可以打；否则返回原因码：
+       "not_your_turn"     —— 现在不是你的出牌阶段
+       "riichi_tsumogiri"  —— 立直中，只能打出刚摸到的那张牌
+
+     以前这个判断埋在 discardTile 里直接 `return false`，UI 拿到 false 只能
+     静默吞掉：玩家点了一张牌 → 牌抬起来（选中态）→ 再点一次毫无反应，
+     看起来就是"这张牌直立着但打不出去"。把原因单独暴露出来，UI 才能给反馈。 */
+  function discardBlockReason(st, tile) {
+    if (st.mode !== "await_discard" && st.mode !== "await_hu_choice") return "not_your_turn";
     /* 立直后只能打出摸到的那张牌（tsumogiri）。
        注意不能用 hand[length-1]：手牌是排序的，摸到的牌不一定在最后一位。 */
     if (st.riichi[0]) {
       var p = st.players[0];
-      if (drawnTileOf(st, p) !== tile) return false;
+      if (drawnTileOf(st, p) !== tile) return "riichi_tsumogiri";
     }
+    return null;
+  }
+
+  /* 摸到的那张牌在手牌数组里的真实索引（找不到返回 -1） */
+  function drawnTileIndex(st, pid) {
+    var p = st.players[pid];
+    return p.hand.indexOf(drawnTileOf(st, p));
+  }
+
+  /* 一次性提示：显示 ms 毫秒（默认 1600）。tileIdx 指定要一起闪烁的手牌真实索引。 */
+  function setHint(st, text, ms, tileIdx) {
+    st.hint = text || "";
+    st.hintT = (typeof ms === "number" && ms > 0) ? ms : 1600;
+    st.hintTile = (typeof tileIdx === "number") ? tileIdx : -1;
+  }
+
+  function clearHint(st) {
+    st.hint = "";
+    st.hintT = 0;
+    st.hintTile = -1;
+  }
+
+  function discardTile(st, tile) {
+    /* 先校验、再改状态。
+       原来是先把 await_hu_choice 改成 await_discard 再校验 —— 一旦校验不过，
+       自摸胡的选择就被静默吞掉了，面板消失、牌也没打出去。 */
+    if (discardBlockReason(st, tile) !== null) return false;
+    if (st.mode === "await_hu_choice") st.mode = "await_discard";
     return discard(st, tile);
   }
 
@@ -876,19 +966,27 @@ var Core = (function () {
   /* =========================================================
      AI 决策
      ========================================================= */
+  /* AI 和牌：不直接跳结算面板，先进入 ai_win 停顿（见 AI_WIN_FRAMES），
+     让玩家看清是哪张牌和了、什么役，再揭晓。 */
+  function aiWin(st, tile, yaku) {
+    var p = st.players[st.turn];
+    var fan = yaku.length >= 7 ? 13 : (yaku.length >= 4 ? 6 : (yaku.length >= 2 ? 3 : 1));
+    st.riichiFirstDraw[st.turn] = false;
+    st.winInfo = { winner: st.turn, fan: fan, reasons: yaku,
+                   tile: tile, type: "draw" };
+    st.mode = "ai_win";
+    st.aiTimer = AI_WIN_FRAMES;
+    st.msg = p.name + " wins · " + fan + " fan (" + yaku.length + " yaku)";
+  }
+
   function aiTurn(st) {
     var p = st.players[st.turn];
     /* 立直时只检查和牌 */
     if (st.riichi[st.turn]) {
       var rt = drawnTileOf(st, p);
       if (canWinFull(p.hand, p.melds, true, true, st.riichiFirstDraw[st.turn], st.lastTileDraw, rt)) {
-        var yaku = checkYaku(p.hand, p.melds, rt, true, true, st.riichiFirstDraw[st.turn], st.lastTileDraw);
-        var fan = yaku.length >= 7 ? 13 : (yaku.length >= 4 ? 6 : (yaku.length >= 2 ? 3 : 1));
-        st.riichiFirstDraw[st.turn] = false;
-        st.winInfo = { winner: st.turn, fan: fan, reasons: yaku,
-                       tile: rt, type: "draw" };
-        st.mode = "round_over";
-        st.msg = p.name + " wins · " + fan + " fan (" + yaku.length + " yaku)";
+        aiWin(st, rt, checkYaku(p.hand, p.melds, rt, true, true,
+                                st.riichiFirstDraw[st.turn], st.lastTileDraw));
         return;
       }
       /* 立直后自动打出摸到的牌 */
@@ -908,12 +1006,7 @@ var Core = (function () {
     /* 正常和牌检查 */
     var at = drawnTileOf(st, p);
     if (canWinFull(p.hand, p.melds, false, true, false, st.lastTileDraw, at)) {
-      var yaku = checkYaku(p.hand, p.melds, at, false, true, false, st.lastTileDraw);
-      var fan = yaku.length >= 7 ? 13 : (yaku.length >= 4 ? 6 : (yaku.length >= 2 ? 3 : 1));
-      st.winInfo = { winner: st.turn, fan: fan, reasons: yaku,
-                     tile: at, type: "draw" };
-      st.mode = "round_over";
-      st.msg = p.name + " wins · " + fan + " fan (" + yaku.length + " yaku)";
+      aiWin(st, at, checkYaku(p.hand, p.melds, at, false, true, false, st.lastTileDraw));
       return;
     }
     /* 暗杠 */
@@ -927,21 +1020,23 @@ var Core = (function () {
     /* 立直 AI 决策 */
     if (canRiichi(st, st.turn) && p.melds.length === 0 && Math.random() < st.aggro * 0.3) {
       declareRiichi(st, st.turn);
-      /* 立直后自动打出摸到的牌 */
-      var rt = p.hand[p.hand.length - 1];
-      var ridx = p.hand.indexOf(rt);
+      /* 立直后自动打出摸到的牌。
+         注意用 drawnTileOf，不能用 hand[length-1] —— 手牌是排序的，
+         最后一张其实是最大的牌，不是刚摸到的那张。 */
+      var rt2 = drawnTileOf(st, p);
+      var ridx = p.hand.indexOf(rt2);
       if (ridx >= 0) {
         p.hand.splice(ridx, 1);
-        p.discards.push(rt);
+        p.discards.push(rt2);
         sortHand(p.hand);
-        st.lastDiscard = { tile: rt, fromPlayer: st.turn };
+        st.lastDiscard = { tile: rt2, fromPlayer: st.turn };
         st.selIdx = -1;
         handleAfterDiscard(st);
       }
       return;
     }
-    var idx = aiPickDiscard(p.hand, st);
-    if (idx >= 0) discard(st, p.hand[idx]);
+    var didx = aiPickDiscard(p.hand, st);
+    if (didx >= 0) discard(st, p.hand[didx]);
   }
 
   function aiPickDiscard(hand, st) {
@@ -968,10 +1063,33 @@ var Core = (function () {
      update
      ========================================================= */
   function update(st, dt) {
+    /* 提示倒计时：任何模式下都要走，否则提示会一直挂在屏幕上 */
+    if (st.hintT > 0) {
+      st.hintT -= (dt || 0);
+      if (st.hintT <= 0) clearHint(st);
+    }
+    /* AI 回合三段展示：draw（摸牌）→ think（思考）→ discard（打牌）。
+       这样玩家能看见 CPU 的摸打过程，而不是一瞬间出结果。 */
     if (st.mode === "ai_turn") {
-      if (st.cpuThinking > 0) {
-        st.cpuThinking--;
-        if (st.cpuThinking === 0) aiTurn(st);
+      if (st.aiTimer > 0) {
+        st.aiTimer--;
+        if (st.aiTimer === 0) {
+          if (st.aiPhase === "draw") {
+            st.aiPhase = "think";
+            st.aiTimer = AI_THINK_FRAMES;
+          } else if (st.aiPhase === "think") {
+            st.aiPhase = "discard";
+            aiTurn(st);   /* 可能改成 ai_win / round_over；暗杠会重新进入 draw 段 */
+          }
+        }
+      }
+      return;
+    }
+    /* AI 和牌停顿：先让玩家看清和牌张与役种，再揭晓结算面板 */
+    if (st.mode === "ai_win") {
+      if (st.aiTimer > 0) {
+        st.aiTimer--;
+        if (st.aiTimer === 0) st.mode = "round_over";
       }
     }
   }
@@ -982,6 +1100,7 @@ var Core = (function () {
   return {
     W: W, H: H, HUD: HUD,
     DIFFS: DIFFS, DIFF_IDS: DIFF_IDS,
+    DON_DEN_COUNT: DON_DEN_COUNT,
     create: create,
     startRound: startRound,
     advance: advance,
@@ -989,6 +1108,10 @@ var Core = (function () {
     setDifficulty: setDifficulty,
 
     discardTile: discardTile,
+    discardBlockReason: discardBlockReason,
+    drawnTileIndex: drawnTileIndex,
+    setHint: setHint,
+    clearHint: clearHint,
     chooseAction: chooseAction,
     decline: decline,
     passHu: passHu,
